@@ -24,9 +24,9 @@ static int prepend_integer(char *buffer, unsigned val, int i)
 
 #define ORIG_OFFSET (40)	/* Enough space to add the header of "tree <size>\0" */
 
-int main(int argc, char **argv)
+int main(void)
 {
-	unsigned long size, offset, val;
+	unsigned long size, offset;
 	int i, entries = read_cache();
 	char *buffer;
 

@@ -70,7 +70,7 @@ char *sha1_file_name(unsigned char *sha1)
 		name = base + len + 1;
 	}
 	for (i = 0; i < 20; i++) {
-		static char hex[] = "0123456789abcdef";
+		static const char hex[] = "0123456789abcdef";
 		unsigned int val = sha1[i];
 		char *pos = name + i*2 + (i > 0);
 		*pos++ = hex[val >> 4];
@@ -84,7 +84,7 @@ void * read_sha1_file(unsigned char *sha1, char *type, unsigned long *size)
 	z_stream stream;
 	char buffer[8192];
 	struct stat st;
-	int i, fd, ret, bytes;
+	int fd, ret, bytes;
 	void *map, *buf;
 	char *filename = sha1_file_name(sha1);
 
@@ -106,7 +106,7 @@ void * read_sha1_file(unsigned char *sha1, char *type, unsigned long *size)
 	memset(&stream, 0, sizeof(stream));
 	stream.next_in = map;
 	stream.avail_in = st.st_size;
-	stream.next_out = buffer;
+	stream.next_out = (unsigned char *)buffer;
 	stream.avail_out = sizeof(buffer);
 
 	inflateInit(&stream);
@@ -120,7 +120,7 @@ void * read_sha1_file(unsigned char *sha1, char *type, unsigned long *size)
 
 	memcpy(buf, buffer + bytes, stream.total_out - bytes);
 	bytes = stream.total_out - bytes;
-	if (bytes < *size && ret == Z_OK) {
+	if ((unsigned long)bytes < *size && ret == Z_OK) {
 		stream.next_out = buf + bytes;
 		stream.avail_out = *size - bytes;
 		while (inflate(&stream, Z_FINISH) == Z_OK)
@@ -145,9 +145,9 @@ int write_sha1_file(char *buf, unsigned len)
 	compressed = malloc(size);
 
 	/* Compress it */
-	stream.next_in = buf;
+	stream.next_in = (unsigned char *)buf;
 	stream.avail_in = len;
-	stream.next_out = compressed;
+	stream.next_out = (unsigned char *)compressed;
 	stream.avail_out = size;
 	while (deflate(&stream, Z_FINISH) == Z_OK)
 		/* nothing */;
@@ -168,12 +168,15 @@ int write_sha1_file(char *buf, unsigned len)
 int write_sha1_buffer(unsigned char *sha1, void *buf, unsigned int size)
 {
 	char *filename = sha1_file_name(sha1);
-	int i, fd;
+	int fd;
 
 	fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd < 0)
 		return (errno == EEXIST) ? 0 : -1;
-	write(fd, buf, size);
+	if (write(fd, buf, size) != size) {
+		perror("unable to write sha1 buffer");
+		return -1;
+	}
 	close(fd);
 	return 0;
 }
@@ -204,7 +207,8 @@ static int verify_hdr(struct cache_header *hdr, unsigned long size)
 
 int read_cache(void)
 {
-	int fd, i;
+	int fd;
+	unsigned int i;
 	struct stat st;
 	unsigned long size, offset;
 	void *map;

@@ -30,7 +30,7 @@ static int match_stat(struct cache_entry *ce, struct stat *st)
 	return changed;
 }
 
-static void show_differences(struct cache_entry *ce, struct stat *cur,
+static void show_differences(struct cache_entry *ce,
 	void *old_contents, unsigned long long old_size)
 {
 	static char cmd[1000];
@@ -42,7 +42,7 @@ static void show_differences(struct cache_entry *ce, struct stat *cur,
 	pclose(f);
 }
 
-int main(int argc, char **argv)
+int main(void)
 {
 	int entries = read_cache();
 	int i;
@@ -55,12 +55,11 @@ int main(int argc, char **argv)
 		struct stat st;
 		struct cache_entry *ce = active_cache[i];
 		int n, changed;
-		unsigned int mode;
 		unsigned long size;
 		char type[20];
 		void *new;
 
-		if (stat(ce->name, &st) < 0) {
+		if (stat((const char *)ce->name, &st) < 0) {
 			printf("%s: %s\n", ce->name, strerror(errno));
 			continue;
 		}
@@ -74,7 +73,7 @@ int main(int argc, char **argv)
 			printf("%02x", ce->sha1[n]);
 		printf("\n");
 		new = read_sha1_file(ce->sha1, type, &size);
-		show_differences(ce, &st, new, size);
+		show_differences(ce, new, size);
 		free(new);
 	}
 	return 0;

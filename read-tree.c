@@ -12,7 +12,7 @@ static int unpack(unsigned char *sha1)
 	if (strcmp(type, "tree"))
 		usage("expected a 'tree' node");
 	while (size) {
-		int len = strlen(buffer)+1;
+		unsigned int len = strlen(buffer)+1;
 		unsigned char *sha1 = buffer + len;
 		char *path = strchr(buffer, ' ')+1;
 		unsigned int mode;
@@ -27,7 +27,6 @@ static int unpack(unsigned char *sha1)
 
 int main(int argc, char **argv)
 {
-	int fd;
 	unsigned char sha1[20];
 
 	if (argc != 2)

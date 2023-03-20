@@ -1,14 +1,17 @@
-CFLAGS=-g
+CFLAGS=-g -Wall -Wextra -std=gnu99
 CC=gcc
 
 PROG=update-cache show-diff init-db write-tree read-tree commit-tree cat-file
 
-all: $(PROG)
+all:
+	nix-shell -p openssl_1_1 -p zlib --command "make clean && make build"
+
+build: $(PROG)
 
 install: $(PROG)
 	install $(PROG) $(HOME)/bin/
 
-LIBS= -lssl
+LIBS= -lssl -lcrypto -lz
 
 init-db: init-db.o
 

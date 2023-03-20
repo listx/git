@@ -1,9 +1,9 @@
 #include "cache.h"
 
-int main(int argc, char **argv)
+int main()
 {
 	char *sha1_dir = getenv(DB_ENVIRONMENT), *path;
-	int len, i, fd;
+	int len, i;
 
 	if (mkdir(".dircache", 0700) < 0) {
 		perror("unable to create .dircache");
@@ -19,8 +19,8 @@ int main(int argc, char **argv)
 	sha1_dir = getenv(DB_ENVIRONMENT);
 	if (sha1_dir) {
 		struct stat st;
-		if (!stat(sha1_dir, &st) < 0 && S_ISDIR(st.st_mode))
-			return;
+		if (!(stat(sha1_dir, &st) < 0) && S_ISDIR(st.st_mode))
+			return 0;
 		fprintf(stderr, "DB_ENVIRONMENT set to bad directory %s: ", sha1_dir);
 	}
 

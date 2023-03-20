@@ -17,7 +17,9 @@ int main(int argc, char **argv)
 	fd = mkstemp(template);
 	if (fd < 0)
 		usage("unable to create tempfile");
-	if (write(fd, buf, size) != size)
+	if ((unsigned long)write(fd, buf, size) != size)
 		strcpy(type, "bad");
 	printf("%s: %s\n", template, type);
+
+	return 0;
 }

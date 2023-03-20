@@ -24,7 +24,7 @@ static int cache_name_pos(const char *name, int namelen)
 	while (last > first) {
 		int next = (last + first) >> 1;
 		struct cache_entry *ce = active_cache[next];
-		int cmp = cache_name_compare(name, namelen, ce->name, ce->namelen);
+		int cmp = cache_name_compare(name, namelen, (const char *)ce->name, ce->namelen);
 		if (!cmp)
 			return -next-1;
 		if (cmp < 0) {
@@ -36,22 +36,23 @@ static int cache_name_pos(const char *name, int namelen)
 	return first;
 }
 
-static int remove_file_from_cache(char *path)
+static int remove_file_from_cache(const char *path)
 {
 	int pos = cache_name_pos(path, strlen(path));
 	if (pos < 0) {
 		pos = -pos-1;
 		active_nr--;
-		if (pos < active_nr)
+		if ((unsigned int)pos < active_nr)
 			memmove(active_cache + pos, active_cache + pos + 1, (active_nr - pos - 1) * sizeof(struct cache_entry *));
 	}
+	return 0;
 }
 
 static int add_cache_entry(struct cache_entry *ce)
 {
 	int pos;
 
-	pos = cache_name_pos(ce->name, ce->namelen);
+	pos = cache_name_pos((const char *)ce->name, ce->namelen);
 
 	/* existing match? Just replace it */
 	if (pos < 0) {
@@ -67,13 +68,13 @@ static int add_cache_entry(struct cache_entry *ce)
 
 	/* Add it in.. */
 	active_nr++;
-	if (active_nr > pos)
+	if (active_nr > (unsigned int)pos)
 		memmove(active_cache + pos + 1, active_cache + pos, (active_nr - pos - 1) * sizeof(ce));
 	active_cache[pos] = ce;
 	return 0;
 }
 
-static int index_fd(const char *path, int namelen, struct cache_entry *ce, int fd, struct stat *st)
+static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st)
 {
 	z_stream stream;
 	int max_out_bytes = namelen + st->st_size + 200;
@@ -150,7 +151,7 @@ static int add_file_to_cache(char *path)
 	ce->st_size = st.st_size;
 	ce->namelen = namelen;
 
-	if (index_fd(path, namelen, ce, fd, &st) < 0)
+	if (index_fd(namelen, ce, fd, &st) < 0)
 		return -1;
 
 	return add_cache_entry(ce);
@@ -245,4 +246,6 @@ int main(int argc, char **argv)
 		return 0;
 out:
 	unlink(".dircache/index.lock");
+
+	return 0;
 }

@@ -203,7 +203,7 @@ static int verify_path(char *path)
 
 	goto inside;
 	for (;;) {
-		if (!c)
+		if (c == '\0')
 			return 1;
 		if (c == '/') {
 inside:
@@ -216,6 +216,14 @@ inside:
 	}
 }
 
+/**
+ * Give file paths to add to the dircache (staging area). This is a primitive
+ * "git add" that only understands entire files. This is also before .gitignore
+ * files were implemented, so we ignore paths that have any hidden dot-files in
+ * them at any point in their path hierarchy (see verify_path()).
+ *
+ * We cannot add directories either, only files (with actual contents!).
+ */
 int main(int argc, char **argv)
 {
 	int i, newfd, entries;

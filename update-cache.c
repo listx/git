@@ -6,15 +6,25 @@ static int cache_name_compare(const char *name1, int len1, const char *name2, in
 	int cmp;
 
 	cmp = memcmp(name1, name2, len);
+	/* There is a mismatch in the first len bytes. */
 	if (cmp)
 		return cmp;
+	/* The first len bytes are identical, so compare based on overall length. */
 	if (len1 < len2)
 		return -1;
 	if (len1 > len2)
 		return 1;
+	/* The two names are identical. */
 	return 0;
 }
 
+/**
+ * This function helps us determine the index into the active_cache[] array for
+ * a given cache_entry, based on its name. It's basically a hashing scheme
+ * because we try to place the entry in the middle of the first and last
+ * entries, if possible (instead of trying to put entries consecutively next to
+ * each other, as a regular array would). It's essentially binary search.
+ */
 static int cache_name_pos(const char *name, int namelen)
 {
 	int first, last;
@@ -22,16 +32,25 @@ static int cache_name_pos(const char *name, int namelen)
 	first = 0;
 	last = active_nr;
 	while (last > first) {
-		int next = (last + first) >> 1;
-		struct cache_entry *ce = active_cache[next];
+		/* Try the middle position first. */
+		int mid = (first + last) >> 1;
+		struct cache_entry *ce = active_cache[mid];
 		int cmp = cache_name_compare(name, namelen, (const char *)ce->name, ce->namelen);
+		/**
+		 * Return a negative number only if the name matches the ce->name
+		 * exactly. This is important for remove_file_from_cache() below.
+		 *
+		 * We "encode" the index value into a negative number, while still
+		 * taking into account the case where "mid" is 0. The -1 at the end
+		 * ensures that we can also handle the mid == 0 case.
+		 */
 		if (!cmp)
-			return -next-1;
+			return -mid-1;
 		if (cmp < 0) {
-			last = next;
+			last = mid;
 			continue;
 		}
-		first = next+1;
+		first = mid+1;
 	}
 	return first;
 }
@@ -39,6 +58,17 @@ static int cache_name_pos(const char *name, int namelen)
 static int remove_file_from_cache(const char *path)
 {
 	int pos = cache_name_pos(path, strlen(path));
+	/**
+	 * Only perform the removal if the file we want to remove matches the
+	 * name already found in the cache.
+	 *
+	 * If pos is negative, make it positive and subtract 1. E.g., if -6, then
+	 * make it 5. This "decodes" it to an actual (natural) index number.
+	 *
+	 * Don't read too deeply into the algorithm below in the current state
+	 * though, because it was refactored a few days later in
+	 * 76e7f4ec485f24b167b76db046dc2ca4562debd4.
+	 */
 	if (pos < 0) {
 		pos = -pos-1;
 		active_nr--;
@@ -78,7 +108,8 @@ static int add_cache_entry(struct cache_entry *ce)
  * Finalize a cache_entry by actually computing its compressed contents' SHA1
  * signature (ce->sha1). "fd" is the file descriptor whose (compressed) contents
  * we want to turn into a blob (along with some metadata alonge the way). We
- * also write this compressed data into ".dircache/objects/dc/...".
+ * also write this compressed data into ".dircache/objects/dc/..." ("dc" is just
+ * an example byte name, and there are 255 others).
  */
 static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st)
 {

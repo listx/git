@@ -265,7 +265,7 @@ int read_cache(void)
 	if (fd < 0)
 		return (errno == ENOENT) ? 0 : error("open failed");
 
-	map = (void *)-1;
+	map = MAP_FAILED;
 	if (!fstat(fd, &st)) {
 		map = NULL;
 		size = st.st_size;
@@ -274,13 +274,23 @@ int read_cache(void)
 			map = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
 	}
 	close(fd);
-	if (-1 == (int)(long)map)
+	if (map == MAP_FAILED)
 		return error("mmap failed");
 
 	hdr = map;
 	if (verify_hdr(hdr, size) < 0)
 		goto unmap;
 
+	/**
+	 * Finally, we're done with proactive error checks.
+	 * We've loaded the index file (essentially memory dump of the cache from a
+	 * previous run of update-cache) to memory with mmap. Now just put it into a
+	 * more manageable data structure, into the active_cache array.
+	 *
+	 * Notice that active_cache only stores pointers to cache_entries. This
+	 * makes sense because the actual values were already mmap'ed into memory
+	 * above.
+	 */
 	active_nr = hdr->entries;
 	active_alloc = alloc_nr(active_nr);
 	active_cache = calloc(active_alloc, sizeof(struct cache_entry *));

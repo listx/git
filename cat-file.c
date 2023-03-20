@@ -1,5 +1,14 @@
 #include "cache.h"
 
+/**
+ * Given a SHA1 hash (you can get this by literally concatenating the directory
+ * and filename of any file in the object store), print out its type (e.g.,
+ * "blob") and write the contents back out to a temporary file.
+ *
+ * E.g., for the file
+ * ".dircache/objects/aa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", you can do
+ * "cat-file aabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".
+ */
 int main(int argc, char **argv)
 {
 	unsigned char sha1[20];

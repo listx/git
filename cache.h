@@ -22,7 +22,7 @@
  * just a cache, after all.
  */
 
-#define CACHE_SIGNATURE 0x44495243	/* "DIRC" */
+#define CACHE_SIGNATURE 0x44495243	/* "DIRC" in hex. */
 struct cache_header {
 	unsigned int signature;
 	unsigned int version;
@@ -94,6 +94,14 @@ extern unsigned int active_nr, active_alloc;
  */
 #define ce_size(ce) cache_entry_size((ce)->namelen)
 
+/**
+ * This computes a new (larger) number for the number of elements we want to
+ * store in active_cache. The +16 is to handle the case where x is 0 (because
+ * without the +16, we'd get 0 forever). As this is called repeatedly, it tends
+ * toward growing at a rate of 1.5 times the size of the previous size because
+ * the "+16" becomes less and less important. IOW the space complexity is
+ * O(1.5 * x).
+ */
 #define alloc_nr(x) (((x)+16)*3/2)
 
 /* Initialize the cache information */

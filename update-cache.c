@@ -74,6 +74,9 @@ static int add_cache_entry(struct cache_entry *ce)
 	return 0;
 }
 
+/**
+ * Read the contents of a file, compress it with zlib, then hash it with SHA1?
+ */
 static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st)
 {
 	z_stream stream;
@@ -117,7 +120,7 @@ static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st
 	return write_sha1_buffer(ce->sha1, out, stream.total_out);
 }
 
-static int add_file_to_cache(char *path)
+static int add_file_to_cache(const char *path)
 {
 	int size, namelen;
 	struct cache_entry *ce;
@@ -126,6 +129,7 @@ static int add_file_to_cache(char *path)
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
+		/* Handle file deletions. */
 		if (errno == ENOENT)
 			return remove_file_from_cache(path);
 		return -1;

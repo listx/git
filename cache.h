@@ -66,7 +66,27 @@ extern unsigned int active_nr, active_alloc;
 #define DB_ENVIRONMENT "SHA1_FILE_DIRECTORY"
 #define DEFAULT_DB_ENVIRONMENT ".dircache/objects"
 
-#define cache_entry_size(len) ((offsetof(struct cache_entry,name) + (len) + 8) & ~7)
+/**
+ * Determine how many bytes a new cache_entry would _actually_ need (for
+ * invoking malloc), because the 'name' member is of variable length (it is the
+ * filepath that this cache_entry represents).
+ *
+ * The total bytes we need are:
+ * 1. Use "offsetof" macro to calculate the static parts of the struct.
+ * 2. Add the length of the path (namelen), in bytes.
+ *
+ * The above are technically enough, but they don't explain the "+ 8" and
+ * masking with ~7 (11111000). This is done so that the total bytes is always
+ * some multiple of 8. The "+ 8" pads 8 additional bytes to whatever the total
+ * of steps 1 and 2 are. At this point we have "N*8 + remainder" bytes where
+ * "remainder" could be 0 through 7. Then we mask it with ~7 (this discards any
+ * value less <= 7) so that we can remove this useless remainder.
+ */
+#define cache_entry_size(namelen) ((offsetof(struct cache_entry,name) + (namelen) + 8) & ~7)
+/**
+ * Calculate the cache_entry_size of an existing (already-malloc-ed)
+ * cache_entry.
+ */
 #define ce_size(ce) cache_entry_size((ce)->namelen)
 
 #define alloc_nr(x) (((x)+16)*3/2)

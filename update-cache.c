@@ -75,19 +75,39 @@ static int add_cache_entry(struct cache_entry *ce)
 }
 
 /**
- * Read the contents of a file, compress it with zlib, then hash it with SHA1?
+ * Finalize a cache_entry by actually computing its compressed contents' SHA1
+ * signature (ce->sha1). "fd" is the file descriptor whose (compressed) contents
+ * we want to turn into a blob (along with some metadata alonge the way). We
+ * also write this compressed data into ".dircache/objects/dc/...".
  */
 static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st)
 {
+	SHA_CTX c;
 	z_stream stream;
+	/**
+	 * Here we add 200 bytes as padding. This is most likely a performance
+	 * optimization for malloc(), similar to the 8-byte alignment we did in the
+	 * cache_entry_size macro.
+	 */
 	int max_out_bytes = namelen + st->st_size + 200;
 	void *out = malloc(max_out_bytes);
 	void *metadata = malloc(namelen + 200);
-	void *in = mmap(NULL, st->st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	SHA_CTX c;
 
+	/**
+	 * mmap() can return MAP_FAILED, which is defined as
+	 *
+	 *   #define MAP_FAILED  ((void *) -1)
+	 *
+	 * on glibc
+	 * (https://github.com/bminor/glibc/blob/9e2ff880f3cbc0b4ec8505ad2ce4a1c92d7f6d56/misc/sys/mman.h#L44).
+	 *
+	 * Note that mmap() will fail if the given file descriptor is for a path
+	 * that is empty (such as a directory or a file with 0 bytes in it).
+	 */
+	void *in = mmap(NULL, st->st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	close(fd);
-	if (!out || (int)(long)in == -1)
+
+	if (!out || in == MAP_FAILED)
 		return -1;
 
 	memset(&stream, 0, sizeof(stream));
@@ -155,6 +175,10 @@ static int add_file_to_cache(const char *path)
 	ce->st_size = st.st_size;
 	ce->namelen = namelen;
 
+	/**
+	 * Calculate the SHA1 of the file and also write its SHA1 object file to
+	 * disk.
+	 */
 	if (index_fd(namelen, ce, fd, &st) < 0)
 		return -1;
 

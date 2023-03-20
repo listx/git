@@ -57,23 +57,48 @@ char * sha1_to_hex(unsigned char *sha1)
 char *sha1_file_name(unsigned char *sha1)
 {
 	int i;
+	/**
+	 * Static allocation! This way we avoid re-computing the sha1_file_directory
+	 * (*base) on every invocation of this function.
+	 */
 	static char *name, *base;
 
 	if (!base) {
 		char *sha1_file_directory = getenv(DB_ENVIRONMENT) ? : DEFAULT_DB_ENVIRONMENT;
 		int len = strlen(sha1_file_directory);
+
+		/* base = ".dircache/objects" + 60 chars */
 		base = malloc(len + 60);
 		memcpy(base, sha1_file_directory, len);
+
+		/* Zero-out the 60 trailing chars. */
 		memset(base+len, 0, 60);
+
+		/* base = ".dircache/objects/" + 59 NUL chars */
 		base[len] = '/';
+		/* base = ".dircache/objects/??/" + 57 NUL chars */
 		base[len+3] = '/';
+		/* Point "name" to the ?? from above. */
 		name = base + len + 1;
 	}
 	for (i = 0; i < 20; i++) {
 		static const char hex[] = "0123456789abcdef";
 		unsigned int val = sha1[i];
+		/**
+		 * We need 2 bytes ("00"-"ff") to represent an integer value of a single
+		 * byte (0-255). Hence the "i*2".
+		 *
+		 * The (i > 0) is for whether we're in our first iteration of this loop
+		 * or not. This matters because the first byte is special, because on
+		 * disk it gets its own folder with a trailing "/" slash (the "??/" part
+		 * above). So all subsequent bytes after the first byte need to be
+		 * offset by an extra byte. Hence the "(i > 0)" which evaluates to 1 if
+		 * this the case.
+		 */
 		char *pos = name + i*2 + (i > 0);
+		/* Convert the top 4 bits of the byte to a hex char. */
 		*pos++ = hex[val >> 4];
+		/* Convert the lower 4 bits of the byte to a hex char. */
 		*pos = hex[val & 0xf];
 	}
 	return base;
@@ -167,10 +192,23 @@ int write_sha1_file(char *buf, unsigned len)
 
 int write_sha1_buffer(unsigned char *sha1, void *buf, unsigned int size)
 {
+	/**
+	 * filename can be, e.g., ".dircache/objects/dc/..." (where "dc" is the
+	 * first byte of SHA1, and "..." is the 38 remaining characters for the 19
+	 * SHA1 byte values.)
+	 *
+	 * The "buf" is the compressed contents _and_ the compressed metadata
+	 * describing this content (blob, tree, etc).
+	 */
 	char *filename = sha1_file_name(sha1);
 	int fd;
 
 	fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	/**
+	 * If the file already exists (EEXIST), then we assume that it has already
+	 * been written to previously (correctly). For other open() errors, return
+	 * -1.
+	 */
 	if (fd < 0)
 		return (errno == EEXIST) ? 0 : -1;
 	if (write(fd, buf, size) != size) {

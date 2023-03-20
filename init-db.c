@@ -38,6 +38,10 @@ int main()
 	}
 	path = malloc(len + 40);
 	memcpy(path, sha1_dir, len);
+	/**
+	 * Create 256 subdirectories, one directory for each possible value of the
+	 * first byte of a SHA1 hash.
+	 */
 	for (i = 0; i < 256; i++) {
 		sprintf(path+len, "/%02x", i);
 		if (mkdir(path, 0700) < 0) {

@@ -56,6 +56,11 @@ struct cache_entry {
 	unsigned int st_size;
 	unsigned char sha1[20];
 	unsigned short namelen;
+	/**
+	 * The "name" comes last because it's the path for a file and is of variable
+	 * length. Putting it here makes computing the bytes needed for a
+	 * cache_entry in the cache_entry_size macro.
+	 */
 	unsigned char name[0];
 };
 

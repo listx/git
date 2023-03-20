@@ -108,8 +108,8 @@ static int add_cache_entry(struct cache_entry *ce)
  * Finalize a cache_entry by actually computing its compressed contents' SHA1
  * signature (ce->sha1). "fd" is the file descriptor whose (compressed) contents
  * we want to turn into a blob (along with some metadata alonge the way). We
- * also write this compressed data into ".dircache/objects/dc/..." ("dc" is just
- * an example byte name, and there are 255 others).
+ * also write this compressed data into ".git/objects/dc/..." ("dc" is just an
+ * example byte name, and there are 255 others).
  */
 static int index_fd(int namelen, struct cache_entry *ce, int fd, struct stat *st)
 {
@@ -250,7 +250,7 @@ static int write_cache(int newfd, struct cache_entry **cache, int entries)
 /*
  * We fundamentally don't like some paths: we don't want
  * dot or dot-dot anywhere, and in fact, we don't even want
- * any other dot-files (.dircache or anything else). They
+ * any other dot-files (.git or anything else). They
  * are hidden, for chist sake.
  *
  * Also, we don't want double slashes or slashes at the
@@ -276,7 +276,7 @@ inside:
 }
 
 /**
- * Give file paths to add to the dircache (staging area). This is a primitive
+ * Give file paths to add to the .git/index (staging area). This is a primitive
  * "git add" that only understands entire files. This is also before .gitignore
  * files were implemented, so we ignore paths that have any hidden dot-files in
  * them at any point in their path hierarchy (see verify_path()).
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	newfd = open(".dircache/index.lock", O_RDWR | O_CREAT | O_EXCL, 0600);
+	newfd = open(".git/index.lock", O_RDWR | O_CREAT | O_EXCL, 0600);
 	if (newfd < 0) {
 		perror("unable to create new cachefile");
 		return -1;
@@ -309,10 +309,10 @@ int main(int argc, char **argv)
 			goto out;
 		}
 	}
-	if (!write_cache(newfd, active_cache, active_nr) && !rename(".dircache/index.lock", ".dircache/index"))
+	if (!write_cache(newfd, active_cache, active_nr) && !rename(".git/index.lock", ".git/index"))
 		return 0;
 out:
-	unlink(".dircache/index.lock");
+	unlink(".git/index.lock");
 
 	return 0;
 }

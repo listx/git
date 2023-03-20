@@ -6,7 +6,7 @@
  * "blob") and write the contents back out to a temporary file.
  *
  * E.g., for the file
- * ".dircache/objects/aa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", you can do
+ * ".git/objects/aa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", you can do
  * "cat-file aabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".
  */
 int main(int argc, char **argv)

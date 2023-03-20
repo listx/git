@@ -5,8 +5,8 @@ int main()
 	char *sha1_dir = getenv(DB_ENVIRONMENT), *path;
 	int len, i;
 
-	if (mkdir(".dircache", 0700) < 0) {
-		perror("unable to create .dircache");
+	if (mkdir(".git", 0700) < 0) {
+		perror("unable to create .git");
 		exit(1);
 	}
 

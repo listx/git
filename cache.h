@@ -69,7 +69,7 @@ extern struct cache_entry **active_cache;
 extern unsigned int active_nr, active_alloc;
 
 #define DB_ENVIRONMENT "SHA1_FILE_DIRECTORY"
-#define DEFAULT_DB_ENVIRONMENT ".dircache/objects"
+#define DEFAULT_DB_ENVIRONMENT ".git/objects"
 
 /**
  * Determine how many bytes a new cache_entry would _actually_ need (for

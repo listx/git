@@ -40,4 +40,4 @@ clean:
 	rm -f *.o $(PROG) temp_git_file_*
 
 backup: clean
-	cd .. ; tar czvf dircache.tar.gz dir-cache
+	cd .. ; tar czvf index.tar.gz .git

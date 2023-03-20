@@ -67,16 +67,16 @@ char *sha1_file_name(unsigned char *sha1)
 		char *sha1_file_directory = getenv(DB_ENVIRONMENT) ? : DEFAULT_DB_ENVIRONMENT;
 		int len = strlen(sha1_file_directory);
 
-		/* base = ".dircache/objects" + 60 chars */
+		/* base = ".git/objects" + 60 chars */
 		base = malloc(len + 60);
 		memcpy(base, sha1_file_directory, len);
 
 		/* Zero-out the 60 trailing chars. */
 		memset(base+len, 0, 60);
 
-		/* base = ".dircache/objects/" + 59 NUL chars */
+		/* base = ".git/objects/" + 59 NUL chars */
 		base[len] = '/';
-		/* base = ".dircache/objects/??/" + 57 NUL chars */
+		/* base = ".git/objects/??/" + 57 NUL chars */
 		base[len+3] = '/';
 		/* Point "name" to the ?? from above. */
 		name = base + len + 1;
@@ -193,7 +193,7 @@ int write_sha1_file(char *buf, unsigned len)
 int write_sha1_buffer(unsigned char *sha1, void *buf, unsigned int size)
 {
 	/**
-	 * filename can be, e.g., ".dircache/objects/dc/..." (where "dc" is the
+	 * filename can be, e.g., ".git/objects/dc/..." (where "dc" is the
 	 * first byte of SHA1, and "..." is the 38 remaining characters for the 19
 	 * SHA1 byte values.)
 	 *
@@ -261,7 +261,7 @@ int read_cache(void)
 		sha1_file_directory = DEFAULT_DB_ENVIRONMENT;
 	if (access(sha1_file_directory, X_OK) < 0)
 		return error("no access to SHA1 file directory");
-	fd = open(".dircache/index", O_RDONLY);
+	fd = open(".git/index", O_RDONLY);
 	if (fd < 0)
 		return (errno == ENOENT) ? 0 : error("open failed");
 

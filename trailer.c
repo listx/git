@@ -1223,20 +1223,22 @@ void format_trailers_from_commit(struct strbuf *out, const char *msg,
 	trailer_info_release(&info);
 }
 
+#define private __private_to_trailer_c__do_not_use
+
 void trailer_iterator_init(struct trailer_iterator *iter, const char *msg)
 {
 	struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
 	strbuf_init(&iter->key, 0);
 	strbuf_init(&iter->val, 0);
 	opts.no_divider = 1;
-	trailer_info_get(&iter->info, msg, &opts);
-	iter->cur = 0;
+	trailer_info_get(&iter->private.info, msg, &opts);
+	iter->private.cur = 0;
 }
 
 int trailer_iterator_advance(struct trailer_iterator *iter)
 {
-	while (iter->cur < iter->info.trailer_nr) {
-		char *trailer = iter->info.trailers[iter->cur++];
+	while (iter->private.cur < iter->private.info.trailer_nr) {
+		char *trailer = iter->private.info.trailers[iter->private.cur++];
 		int separator_pos = find_separator(trailer, separators);
 
 		if (separator_pos < 1)
@@ -1254,7 +1256,7 @@ int trailer_iterator_advance(struct trailer_iterator *iter)
 
 void trailer_iterator_release(struct trailer_iterator *iter)
 {
-	trailer_info_release(&iter->info);
+	trailer_info_release(&iter->private.info);
 	strbuf_release(&iter->val);
 	strbuf_release(&iter->key);
 }

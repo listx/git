@@ -810,14 +810,14 @@ static ssize_t last_line(const char *buf, size_t len)
  * Return the position of the start of the patch or the length of str if there
  * is no patch in the message.
  */
-static size_t find_patch_start(const char *str)
+static size_t find_patch_start(const char *str, int no_divider)
 {
 	const char *s;
 
 	for (s = str; *s; s = next_line(s)) {
 		const char *v;
 
-		if (skip_prefix(s, "---", &v) && isspace(*v))
+		if (!no_divider && skip_prefix(s, "---", &v) && isspace(*v))
 			return s - str;
 	}
 
@@ -1102,11 +1102,7 @@ void trailer_info_get(struct trailer_info *info, const char *str,
 
 	ensure_configured();
 
-	if (opts->no_divider)
-		patch_start = strlen(str);
-	else
-		patch_start = find_patch_start(str);
-
+	patch_start = find_patch_start(str, opts->no_divider);
 	trailer_end = find_trailer_end(str, patch_start);
 	trailer_start = find_trailer_start(str, trailer_end);
 

@@ -1289,13 +1289,13 @@ test_expect_success 'the default is "ifMissing = add"' '
 '
 
 test_expect_success 'overriding configuration with "--if-missing doNothing"' '
-	git config trailer.ifmissing "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
+	test_config trailer.ifmissing "add" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1315,12 +1315,12 @@ test_expect_success 'overriding configuration with "--if-missing doNothing"' '
 '
 
 test_expect_success 'when default "ifMissing" is "doNothing"' '
-	git config trailer.ifmissing "doNothing" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
+	test_config trailer.ifmissing "doNothing" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1335,8 +1335,7 @@ test_expect_success 'when default "ifMissing" is "doNothing"' '
 		--trailer "cc=Linus" --trailer "ack: Junio" \
 		--trailer "fix=22" --trailer "bug: 42" --trailer "ack: Peff" \
 		<complex_message >actual &&
-	test_cmp expected actual &&
-	git config trailer.ifmissing "add"
+	test_cmp expected actual
 '
 
 test_expect_success 'using "ifMissing = add" with "where = end"' '

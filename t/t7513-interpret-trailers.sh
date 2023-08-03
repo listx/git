@@ -1339,12 +1339,12 @@ test_expect_success 'when default "ifMissing" is "doNothing"' '
 '
 
 test_expect_success 'using "ifMissing = add" with "where = end"' '
-	git config trailer.cc.ifMissing "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
 	test_config trailer.cc.key "Cc: " &&
+	test_config trailer.cc.ifMissing "add" &&
 	test_config trailer.cc.where "end" &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
@@ -1369,12 +1369,12 @@ test_expect_success 'using "ifMissing = add" with "where = end"' '
 '
 
 test_expect_success 'using "ifMissing = add" with "where = before"' '
-	git config trailer.cc.ifMissing "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
 	test_config trailer.cc.key "Cc: " &&
+	test_config trailer.cc.ifMissing "add" &&
 	test_config trailer.cc.where "before" &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
@@ -1399,11 +1399,11 @@ test_expect_success 'using "ifMissing = add" with "where = before"' '
 '
 
 test_expect_success 'using "ifMissing = doNothing"' '
-	git config trailer.cc.ifMissing "doNothing" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.cc.ifMissing "doNothing" &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&

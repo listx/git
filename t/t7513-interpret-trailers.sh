@@ -1533,12 +1533,11 @@ test_expect_success 'setup a commit' '
 '
 
 test_expect_success 'cmd takes precedence over command' '
-	test_when_finished "git config --unset trailer.fix.cmd" &&
-	git config trailer.fix.cmd "test -n \"\$1\" && git log -1 --oneline --format=\"%h (%aN)\" \
-	--abbrev-commit --abbrev=14 \"\$1\" || true" &&
 	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" \
 		--abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.cmd "test -n \"\$1\" && git log -1 --oneline --format=\"%h (%aN)\" \
+	--abbrev-commit --abbrev=14 \"\$1\" || true" &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&

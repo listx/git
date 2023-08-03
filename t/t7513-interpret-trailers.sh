@@ -1462,10 +1462,10 @@ test_expect_success 'with simple command' '
 	git config trailer.sign.key "Signed-off-by: " &&
 	git config trailer.sign.where "after" &&
 	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
-	git config trailer.sign.command "echo \"A U Thor <author@example.com>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"A U Thor <author@example.com>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1483,10 +1483,10 @@ test_expect_success 'with simple command' '
 
 test_expect_success 'with command using committer information' '
 	git config trailer.sign.ifExists "addIfDifferent" &&
-	git config trailer.sign.command "echo \"\$GIT_COMMITTER_NAME <\$GIT_COMMITTER_EMAIL>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"\$GIT_COMMITTER_NAME <\$GIT_COMMITTER_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1506,10 +1506,10 @@ test_expect_success 'with command using author information' '
 	git config trailer.sign.key "Signed-off-by: " &&
 	git config trailer.sign.where "after" &&
 	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
-	git config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1542,6 +1542,7 @@ test_expect_success 'cmd takes precedence over command' '
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	FIXED=$(git log -1 --oneline --format="%h (%aN)" --abbrev-commit --abbrev=14 HEAD) &&
@@ -1565,6 +1566,7 @@ test_expect_success 'with command using $ARG' '
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	FIXED=$(git log -1 --oneline --format="%h (%s)" --abbrev-commit --abbrev=14 HEAD) &&
@@ -1588,6 +1590,7 @@ test_expect_success 'with failing command using $ARG' '
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1605,6 +1608,7 @@ test_expect_success 'with failing command using $ARG' '
 
 test_expect_success 'with empty tokens' '
 	git config --unset trailer.fix.command &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	cat >expected <<-EOF &&
 
@@ -1617,6 +1621,7 @@ test_expect_success 'with empty tokens' '
 
 test_expect_success 'with command but no key' '
 	git config --unset trailer.sign.key &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	cat >expected <<-EOF &&
 
@@ -1629,6 +1634,7 @@ test_expect_success 'with command but no key' '
 
 test_expect_success 'with no command and no key' '
 	test_config trailer.review.where "before" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	cat >expected <<-EOF &&
 
@@ -1642,6 +1648,7 @@ test_expect_success 'with no command and no key' '
 
 test_expect_success 'with cut line' '
 	test_config trailer.review.where "before" &&
+	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	cat >expected <<-\EOF &&
 		my subject
 
@@ -1659,8 +1666,8 @@ test_expect_success 'with cut line' '
 '
 
 test_expect_success 'only trailers' '
+	test_config trailer.sign.command "echo config-value" &&
 	test_config trailer.ifexists "addIfDifferent" &&
-	git config trailer.sign.command "echo config-value" &&
 	cat >expected <<-\EOF &&
 		existing: existing-value
 		sign: config-value
@@ -1679,7 +1686,7 @@ test_expect_success 'only trailers' '
 '
 
 test_expect_success 'only-trailers omits non-trailer in middle of block' '
-	git config trailer.sign.command "echo config-value" &&
+	test_config trailer.sign.command "echo config-value" &&
 	cat >expected <<-\EOF &&
 		Signed-off-by: nobody <nobody@nowhere>
 		Signed-off-by: somebody <somebody@somewhere>
@@ -1699,7 +1706,7 @@ test_expect_success 'only-trailers omits non-trailer in middle of block' '
 '
 
 test_expect_success 'only input' '
-	git config trailer.sign.command "echo config-value" &&
+	test_config trailer.sign.command "echo config-value" &&
 	cat >expected <<-\EOF &&
 		existing: existing-value
 	EOF

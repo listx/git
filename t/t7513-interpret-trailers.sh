@@ -969,7 +969,7 @@ test_expect_success 'default "ifExists" is now "addIfDifferent"' '
 '
 
 test_expect_success 'using "ifExists = addIfDifferent" with "where = end"' '
-	git config trailer.ack.ifExists "addIfDifferent" &&
+	test_config trailer.ack.ifExists "addIfDifferent" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -993,7 +993,7 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = end"' '
 '
 
 test_expect_success 'using "ifExists = addIfDifferent" with "where = before"' '
-	git config trailer.ack.ifExists "addIfDifferent" &&
+	test_config trailer.ack.ifExists "addIfDifferent" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "before" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -1017,7 +1017,7 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = before"' '
 '
 
 test_expect_success 'using "ifExists = addIfDifferentNeighbor" with "where = end"' '
-	git config trailer.ack.ifExists "addIfDifferentNeighbor" &&
+	test_config trailer.ack.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -1046,7 +1046,7 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor" with "where = end
 '
 
 test_expect_success 'using "ifExists = addIfDifferentNeighbor"  with "where = after"' '
-	git config trailer.ack.ifExists "addIfDifferentNeighbor" &&
+	test_config trailer.ack.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -1074,7 +1074,7 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor"  with "where = af
 '
 
 test_expect_success 'using "ifExists = addIfDifferentNeighbor" and --trim-empty' '
-	git config trailer.ack.ifExists "addIfDifferentNeighbor" &&
+	test_config trailer.ack.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
@@ -1094,7 +1094,7 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor" and --trim-empty'
 '
 
 test_expect_success 'using "ifExists = add" with "where = end"' '
-	git config trailer.ack.ifExists "add" &&
+	test_config trailer.ack.ifExists "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -1125,7 +1125,7 @@ test_expect_success 'using "ifExists = add" with "where = end"' '
 '
 
 test_expect_success 'using "ifExists = add" with "where = after"' '
-	git config trailer.ack.ifExists "add" &&
+	test_config trailer.ack.ifExists "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -1417,6 +1417,7 @@ test_expect_success 'using "ifMissing = doNothing"' '
 
 test_expect_success 'default "where" is now "after"' '
 	git config trailer.where "after" &&
+	test_config trailer.ack.ifExists "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&

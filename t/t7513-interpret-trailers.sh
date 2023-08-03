@@ -834,7 +834,7 @@ test_expect_success 'using "where = after"' '
 
 test_expect_success 'using "where = end"' '
 	git config trailer.review.key "Reviewed-by" &&
-	git config trailer.review.where "end" &&
+	test_config trailer.review.where "end" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.separators ":=" &&
@@ -856,7 +856,7 @@ test_expect_success 'using "where = end"' '
 
 test_expect_success 'using "where = start"' '
 	git config trailer.review.key "Reviewed-by" &&
-	git config trailer.review.where "start" &&
+	test_config trailer.review.where "start" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.separators ":=" &&
@@ -878,7 +878,7 @@ test_expect_success 'using "where = start"' '
 
 test_expect_success 'using "where = before" for a token in the middle of the message' '
 	git config trailer.review.key "Reviewed-by:" &&
-	git config trailer.review.where "before" &&
+	test_config trailer.review.where "before" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
@@ -923,6 +923,7 @@ test_expect_success 'the default is "ifExists = addIfDifferentNeighbor"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.where "before" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1143,6 +1144,7 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.where "before" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1556,6 +1558,7 @@ test_expect_success 'with command but no key' '
 
 test_expect_success 'with no command and no key' '
 	git config --unset trailer.review.key &&
+	test_config trailer.review.where "before" &&
 	cat >expected <<-EOF &&
 
 		review: Junio
@@ -1567,6 +1570,7 @@ test_expect_success 'with no command and no key' '
 '
 
 test_expect_success 'with cut line' '
+	test_config trailer.review.where "before" &&
 	cat >expected <<-\EOF &&
 		my subject
 

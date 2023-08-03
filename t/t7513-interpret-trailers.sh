@@ -833,7 +833,7 @@ test_expect_success 'using "where = after"' '
 '
 
 test_expect_success 'using "where = end"' '
-	git config trailer.review.key "Reviewed-by" &&
+	test_config trailer.review.key "Reviewed-by" &&
 	test_config trailer.review.where "end" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
@@ -855,7 +855,7 @@ test_expect_success 'using "where = end"' '
 '
 
 test_expect_success 'using "where = start"' '
-	git config trailer.review.key "Reviewed-by" &&
+	test_config trailer.review.key "Reviewed-by" &&
 	test_config trailer.review.where "start" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
@@ -877,7 +877,7 @@ test_expect_success 'using "where = start"' '
 '
 
 test_expect_success 'using "where = before" for a token in the middle of the message' '
-	git config trailer.review.key "Reviewed-by:" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.review.where "before" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
@@ -904,6 +904,7 @@ test_expect_success 'using "where = before" and --trim-empty' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	cat >>expected <<-\EOF &&
@@ -923,6 +924,7 @@ test_expect_success 'the default is "ifExists = addIfDifferentNeighbor"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.review.where "before" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
@@ -948,6 +950,7 @@ test_expect_success 'default "ifExists" is now "addIfDifferent"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -971,6 +974,7 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = end"' '
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -993,6 +997,7 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = before"' '
 	test_config trailer.ack.where "before" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1015,6 +1020,7 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor" with "where = end
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1042,6 +1048,7 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor"  with "where = af
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1088,6 +1095,7 @@ test_expect_success 'using "ifExists = add" with "where = end"' '
 	test_config trailer.ack.where "end" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1117,6 +1125,7 @@ test_expect_success 'using "ifExists = add" with "where = after"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1144,6 +1153,7 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.review.where "before" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
@@ -1167,6 +1177,7 @@ test_expect_success 'using "ifExists = replace"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1191,6 +1202,7 @@ test_expect_success 'using "ifExists = replace" with "where = after"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1215,6 +1227,7 @@ test_expect_success 'using "ifExists = doNothing"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1240,6 +1253,7 @@ test_expect_success 'the default is "ifMissing = add"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1263,6 +1277,7 @@ test_expect_success 'overriding configuration with "--if-missing doNothing"' '
 	git config trailer.ifmissing "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1285,6 +1300,7 @@ test_expect_success 'when default "ifMissing" is "doNothing"' '
 	git config trailer.ifmissing "doNothing" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1311,6 +1327,7 @@ test_expect_success 'using "ifMissing = add" with "where = end"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1338,6 +1355,7 @@ test_expect_success 'using "ifMissing = add" with "where = before"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1363,6 +1381,7 @@ test_expect_success 'using "ifMissing = doNothing"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1387,6 +1406,7 @@ test_expect_success 'default "where" is now "after"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=#" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1416,6 +1436,7 @@ test_expect_success 'with simple command' '
 	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	git config trailer.sign.command "echo \"A U Thor <author@example.com>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1434,6 +1455,7 @@ test_expect_success 'with command using committer information' '
 	git config trailer.sign.ifExists "addIfDifferent" &&
 	git config trailer.sign.command "echo \"\$GIT_COMMITTER_NAME <\$GIT_COMMITTER_EMAIL>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1454,6 +1476,7 @@ test_expect_success 'with command using author information' '
 	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	git config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
@@ -1482,6 +1505,7 @@ test_expect_success 'cmd takes precedence over command' '
 	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" \
 		--abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	FIXED=$(git log -1 --oneline --format="%h (%aN)" --abbrev-commit --abbrev=14 HEAD) &&
 	cat complex_message_body >expected2 &&
@@ -1501,6 +1525,7 @@ test_expect_success 'with command using $ARG' '
 	git config trailer.fix.ifExists "replace" &&
 	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" --abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	FIXED=$(git log -1 --oneline --format="%h (%s)" --abbrev-commit --abbrev=14 HEAD) &&
 	cat complex_message_body >expected &&
@@ -1520,6 +1545,7 @@ test_expect_success 'with failing command using $ARG' '
 	git config trailer.fix.ifExists "replace" &&
 	git config trailer.fix.command "false \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-EOF &&
@@ -1557,7 +1583,6 @@ test_expect_success 'with command but no key' '
 '
 
 test_expect_success 'with no command and no key' '
-	git config --unset trailer.review.key &&
 	test_config trailer.review.where "before" &&
 	cat >expected <<-EOF &&
 

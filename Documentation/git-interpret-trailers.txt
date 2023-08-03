@@ -114,7 +114,7 @@ OPTIONS
 	Specify where all new trailers will be added.  A setting
 	provided with '--where' overrides all configuration variables
 	and applies to all '--trailer' options until the next occurrence of
-	'--where' or '--no-where'. Possible values are `after`, `before`,
+	'--where' or '--no-where'. Possible placements are `after`, `before`,
 	`end` or `start`.
 
 --if-exists <action>::

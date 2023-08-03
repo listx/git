@@ -1204,13 +1204,13 @@ test_expect_success 'using "ifExists = replace"' '
 '
 
 test_expect_success 'using "ifExists = replace" with "where = after"' '
-	git config trailer.fix.where "after" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
+	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=#" &&
@@ -1541,6 +1541,7 @@ test_expect_success 'cmd takes precedence over command' '
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
+	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
@@ -1563,6 +1564,7 @@ test_expect_success 'with command using $ARG' '
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
+	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
@@ -1585,6 +1587,7 @@ test_expect_success 'with failing command using $ARG' '
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
+	test_config trailer.fix.where "after" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&

@@ -1153,7 +1153,7 @@ test_expect_success 'using "ifExists = add" with "where = after"' '
 '
 
 test_expect_success 'overriding configuration with "--if-exists replace"' '
-	git config trailer.fix.key "Fixes: " &&
+	test_config trailer.fix.key "Fixes: " &&
 	git config trailer.fix.ifExists "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
@@ -1177,7 +1177,7 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 '
 
 test_expect_success 'using "ifExists = replace"' '
-	git config trailer.fix.key "Fixes: " &&
+	test_config trailer.fix.key "Fixes: " &&
 	git config trailer.fix.ifExists "replace" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
@@ -1209,6 +1209,7 @@ test_expect_success 'using "ifExists = replace" with "where = after"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=#" &&
@@ -1235,6 +1236,7 @@ test_expect_success 'using "ifExists = doNothing"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=#" &&
@@ -1262,6 +1264,7 @@ test_expect_success 'the default is "ifMissing = add"' '
 	test_config trailer.ack.where "after" &&
 	test_config trailer.bug.key "Bug #" &&
 	test_config trailer.bug.where "before" &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=#" &&
@@ -1287,6 +1290,7 @@ test_expect_success 'overriding configuration with "--if-missing doNothing"' '
 	git config trailer.ifmissing "add" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
@@ -1525,6 +1529,7 @@ test_expect_success 'cmd takes precedence over command' '
 	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" \
 		--abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
@@ -1546,6 +1551,7 @@ test_expect_success 'with command using $ARG' '
 	git config trailer.fix.ifExists "replace" &&
 	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" --abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
@@ -1567,6 +1573,7 @@ test_expect_success 'with failing command using $ARG' '
 	git config trailer.fix.ifExists "replace" &&
 	git config trailer.fix.command "false \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&

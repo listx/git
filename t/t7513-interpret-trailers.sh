@@ -1461,11 +1461,11 @@ test_expect_success 'default "where" is now "after"' '
 test_expect_success 'with simple command' '
 	git config trailer.sign.key "Signed-off-by: " &&
 	git config trailer.sign.where "after" &&
-	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.sign.command "echo \"A U Thor <author@example.com>\"" &&
+	test_config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1482,11 +1482,11 @@ test_expect_success 'with simple command' '
 '
 
 test_expect_success 'with command using committer information' '
-	git config trailer.sign.ifExists "addIfDifferent" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.sign.command "echo \"\$GIT_COMMITTER_NAME <\$GIT_COMMITTER_EMAIL>\"" &&
+	test_config trailer.sign.ifExists "addIfDifferent" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&
@@ -1505,11 +1505,11 @@ test_expect_success 'with command using committer information' '
 test_expect_success 'with command using author information' '
 	git config trailer.sign.key "Signed-off-by: " &&
 	git config trailer.sign.where "after" &&
-	git config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.fix.ifExists "doNothing" &&
 	test_config trailer.review.key "Reviewed-by:" &&
 	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
+	test_config trailer.sign.ifExists "addIfDifferentNeighbor" &&
 	test_config trailer.ifexists "addIfDifferent" &&
 	test_config trailer.separators ":=" &&
 	cat complex_message_body >expected &&

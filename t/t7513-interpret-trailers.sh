@@ -1533,9 +1533,9 @@ test_expect_success 'setup a commit' '
 '
 
 test_expect_success 'cmd takes precedence over command' '
-	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" \
-		--abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" \
+		--abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.fix.cmd "test -n \"\$1\" && git log -1 --oneline --format=\"%h (%aN)\" \
 	--abbrev-commit --abbrev=14 \"\$1\" || true" &&
 	test_config trailer.fix.key "Fixes: " &&
@@ -1561,8 +1561,8 @@ test_expect_success 'cmd takes precedence over command' '
 '
 
 test_expect_success 'with command using $ARG' '
-	git config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" --abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.command "git log -1 --oneline --format=\"%h (%s)\" --abbrev-commit --abbrev=14 \$ARG" &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&
@@ -1586,8 +1586,8 @@ test_expect_success 'with command using $ARG' '
 '
 
 test_expect_success 'with failing command using $ARG' '
-	git config trailer.fix.command "false \$ARG" &&
 	test_config trailer.ack.key "Acked-by= " &&
+	test_config trailer.fix.command "false \$ARG" &&
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "replace" &&
 	test_config trailer.fix.where "after" &&
@@ -1610,7 +1610,6 @@ test_expect_success 'with failing command using $ARG' '
 '
 
 test_expect_success 'with empty tokens' '
-	git config --unset trailer.fix.command &&
 	test_config trailer.sign.command "echo \"\$GIT_AUTHOR_NAME <\$GIT_AUTHOR_EMAIL>\"" &&
 	test_config trailer.sign.key "Signed-off-by: " &&
 	test_config trailer.ifexists "addIfDifferent" &&

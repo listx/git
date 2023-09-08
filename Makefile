@@ -2662,6 +2662,7 @@ REFTABLE_TEST_OBJS += reftable/test_framework.o
 REFTABLE_TEST_OBJS += reftable/tree_test.o
 
 TEST_OBJS := $(patsubst %$X,%.o,$(TEST_PROGRAMS)) $(patsubst %,t/helper/%,$(TEST_BUILTINS_OBJS))
+TEST_OBJS += t/stdlib-test.o
 
 .PHONY: test-objs
 test-objs: $(TEST_OBJS)
@@ -3188,7 +3189,11 @@ endif
 
 test_bindir_programs := $(patsubst %,bin-wrappers/%,$(BINDIR_PROGRAMS_NEED_X) $(BINDIR_PROGRAMS_NO_X) $(TEST_PROGRAMS_NEED_X))
 
-all:: $(TEST_PROGRAMS) $(test_bindir_programs)
+t/stdlib-test$X: t/stdlib-test.o GIT-LDFLAGS $(STD_LIB_FILE) $(STUB_LIB_FILE)
+	$(QUIET_LINK)$(CC) $(ALL_CFLAGS) -o $@ $(ALL_LDFLAGS) \
+		$^ $(STD_LIB_FILE) $(STUB_LIB_FILE)
+
+all:: $(TEST_PROGRAMS) $(test_bindir_programs) t/stdlib-test$X
 
 bin-wrappers/%: wrap-for-bin.sh
 	$(call mkdir_p_parent_template)
@@ -3681,7 +3686,7 @@ clean: profile-clean coverage-clean cocciclean
 	$(RM) headless-git.o
 	$(RM) $(LIB_FILE) $(XDIFF_LIB) $(REFTABLE_LIB) $(REFTABLE_TEST_LIB) $(STD_LIB_FILE) $(STUB_LIB_FILE)
 	$(RM) $(ALL_PROGRAMS) $(SCRIPT_LIB) $(BUILT_INS) $(OTHER_PROGRAMS)
-	$(RM) $(TEST_PROGRAMS)
+	$(RM) $(TEST_PROGRAMS) t/stdlib-test$X
 	$(RM) $(FUZZ_PROGRAMS)
 	$(RM) $(SP_OBJ)
 	$(RM) $(HCC)

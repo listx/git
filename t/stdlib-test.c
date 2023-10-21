@@ -16,7 +16,8 @@
  * lib.a), this file can be removed.
  */
 
-static void abspath_funcs(void) {
+static void abspath_funcs(void)
+{
 	struct strbuf sb = STRBUF_INIT;
 
 	fprintf(stderr, "calling abspath functions\n");
@@ -33,7 +34,8 @@ static void abspath_funcs(void) {
 	strbuf_add_real_path(&sb, "foo");
 }
 
-static void hex_ll_funcs(void) {
+static void hex_ll_funcs(void)
+{
 	unsigned char c;
 
 	fprintf(stderr, "calling hex-ll functions\n");
@@ -43,7 +45,8 @@ static void hex_ll_funcs(void) {
 	hex_to_bytes(&c, "A1", 2);
 }
 
-static void parse_funcs(void) {
+static void parse_funcs(void)
+{
 	intmax_t foo;
 	ssize_t foo1 = -1;
 	unsigned long foo2;
@@ -63,11 +66,13 @@ static void parse_funcs(void) {
 	git_env_ulong("foo", 1);
 }
 
-static int allow_unencoded_fn(char ch) {
+static int allow_unencoded_fn(char ch)
+{
 	return 0;
 }
 
-static void strbuf_funcs(void) {
+static void strbuf_funcs(void)
+{
 	struct strbuf *sb = xmalloc(sizeof(void*));
 	struct strbuf *sb2 = xmalloc(sizeof(void*));
 	struct strbuf sb3 = STRBUF_INIT;
@@ -134,7 +139,8 @@ static void strbuf_funcs(void) {
 static void error_builtin(const char *err, va_list params) {}
 static void warn_builtin(const char *err, va_list params) {}
 
-static void usage_funcs(void) {
+static void usage_funcs(void)
+{
 	fprintf(stderr, "calling usage functions\n");
 	error("foo");
 	error_errno("foo");
@@ -150,7 +156,8 @@ static void usage_funcs(void) {
 	get_warn_routine();
 }
 
-static void wrapper_funcs(void) {
+static void wrapper_funcs(void)
+{
 	int tmp;
 	void *ptr = xmalloc(1);
 	int fd = open("/dev/null", O_RDONLY);
@@ -200,7 +207,8 @@ static void wrapper_funcs(void) {
 	pread_in_full(fd, &sb, 1, 0);
 }
 
-int main(int argc, const char **argv) {
+int main(int argc, const char **argv)
+{
 	abspath_funcs();
 	hex_ll_funcs();
 	parse_funcs();

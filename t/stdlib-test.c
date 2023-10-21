@@ -4,6 +4,7 @@
 #include "parse.h"
 #include "strbuf.h"
 #include "string-list.h"
+#include "strvec.h"
 
 /*
  * Calls all functions from git-std-lib
@@ -136,6 +137,24 @@ static void strbuf_funcs(void)
 	xstrfmt("%s", "foo");
 }
 
+static void strvec_funcs(void)
+{
+	struct strvec sv = STRVEC_INIT;
+	const char *strs[] = {"foo", "bar", NULL};
+
+	fprintf(stderr, "calling strvec functions\n");
+
+	strvec_init(&sv);
+	strvec_push(&sv, "foo");
+	strvec_pushf(&sv, "foo-%s", "bar");
+	strvec_pushl(&sv, "foo", "bar", "baz", NULL);
+	strvec_pushv(&sv, strs);
+	strvec_pop(&sv);
+	strvec_split(&sv, "a b c");
+	strvec_detach(&sv);
+	strvec_clear(&sv);
+}
+
 static void error_builtin(const char *err, va_list params) {}
 static void warn_builtin(const char *err, va_list params) {}
 
@@ -213,6 +232,7 @@ int main(int argc, const char **argv)
 	hex_ll_funcs();
 	parse_funcs();
 	strbuf_funcs();
+	strvec_funcs();
 	usage_funcs();
 	wrapper_funcs();
 	fprintf(stderr, "all git-std-lib functions finished calling\n");

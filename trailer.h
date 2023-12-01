@@ -118,6 +118,19 @@ struct trailer_iterator {
 	struct strbuf key;
 	struct strbuf val;
 
+	/*
+	 * Raw line (e.g., "foo: bar baz") before being parsed as a trailer
+	 * key/val pair. This field can contain non-trailer lines because it's
+	 * valid for a trailer block to contain such lines (i.e., we only
+	 * require 25% of the lines in a trailer block to be trailer lines).
+	 */
+	struct strbuf raw;
+
+	/*
+	 * 1 if the raw line was parsed as a separate key/val pair.
+	 */
+	int is_trailer;
+
 	/* private */
 	struct {
 		struct trailer_info info;
@@ -142,6 +155,7 @@ void trailer_iterator_init(struct trailer_iterator *iter, const char *msg);
  * only until the next advance).
  */
 int trailer_iterator_advance(struct trailer_iterator *iter);
+int trailer_iterator_advance_always(struct trailer_iterator *iter);
 
 /*
  * Release all resources associated with the trailer iteration.

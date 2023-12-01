@@ -1151,6 +1151,7 @@ void trailer_iterator_init(struct trailer_iterator *iter, const char *msg)
 	struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
 	strbuf_init(&iter->key, 0);
 	strbuf_init(&iter->val, 0);
+	strbuf_init(&iter->raw, 0);
 	opts.no_divider = 1;
 	trailer_info_get(&iter->internal.info, msg, &opts);
 	iter->internal.cur = 0;
@@ -1158,17 +1159,19 @@ void trailer_iterator_init(struct trailer_iterator *iter, const char *msg)
 
 int trailer_iterator_advance(struct trailer_iterator *iter)
 {
-	while (iter->internal.cur < iter->internal.info.trailer_nr) {
-		char *trailer = iter->internal.info.trailers[iter->internal.cur++];
-		int separator_pos = find_separator(trailer, separators);
+	char *line;
+	int separator_pos;
+	if (iter->internal.cur < iter->internal.info.trailer_nr) {
+		line = iter->internal.info.trailers[iter->internal.cur++];
+		separator_pos = find_separator(line, separators);
+		iter->is_trailer = (separator_pos > 0);
 
-		if (separator_pos < 1)
-			continue; /* not a real trailer */
-
+		strbuf_reset(&iter->raw);
+		strbuf_addstr(&iter->raw, line);
 		strbuf_reset(&iter->key);
 		strbuf_reset(&iter->val);
 		parse_trailer(&iter->key, &iter->val, NULL,
-			      trailer, separator_pos);
+			      line, separator_pos);
 		unfold_value(&iter->val);
 		return 1;
 	}
@@ -1180,4 +1183,5 @@ void trailer_iterator_release(struct trailer_iterator *iter)
 	trailer_info_release(&iter->internal.info);
 	strbuf_release(&iter->val);
 	strbuf_release(&iter->key);
+	strbuf_release(&iter->raw);
 }

@@ -55,6 +55,10 @@ static const char *git_generated_prefixes[] = {
 	NULL
 };
 
+void trailer_info_get(struct trailer_info *info, const char *str,
+		      const struct process_trailer_options *opts);
+void trailer_info_release(struct trailer_info *info);
+
 /* Iterate over the elements of the list. */
 #define list_for_each_dir(pos, head, is_reverse) \
 	for (pos = is_reverse ? (head)->prev : (head)->next; \

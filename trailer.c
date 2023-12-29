@@ -12,6 +12,136 @@
  * Copyright (c) 2013, 2014 Christian Couder <chriscool@tuxfamily.org>
  */
 
+/*
+ * A "trailer" (parsed from some input text) is composed of a key and value,
+ * both strings, separated by a delimiter.
+ */
+struct trailer {
+	struct list_head list;
+
+	/*
+	 * Raw line before being parsed as a trailer key/val pair. This can be a
+	 * multiline string if the trailer was broken up (aka "folded") over
+	 * multiple lines. Does not include trailing newline characters from the
+	 * original string.
+	 *
+	 * Note that this string can be non-trailer text, if it couldn't be
+	 * parsed as a key/val pair.
+	 */
+	struct strbuf raw;
+
+	/*
+	 * The key and value, if "raw" was able to be parsed as a trailer.
+	 * Otherwise these strbufs are empty.
+	 */
+	struct strbuf key;
+	struct strbuf val;
+
+	/*
+	 * Separator character that was used to separate the key and value. A
+	 * trailer block may contain trailers that use different separator
+	 * characters.
+	 */
+	char separator;
+};
+
+/*
+ * List of trailers, parsed from some input text. This holds some additional
+ * information about the collection of trailers taken together as a whole.
+ */
+struct trailers {
+	struct trailer *trailer;
+
+	/*
+	 * Number of trailer_block_item items that are trailers.
+	 */
+	size_t trailer_nr;
+
+	/*
+	 * Total number of trailer_block_item items (includes non-trailers in
+	 * the block).
+	 */
+	size_t total_nr;
+
+	/*
+	 * True if trailer_nr/total_nr is >= 25%.
+	 *
+	 * FIXME: Move this to a public function. Otherwise we always have to
+	 * recompute this every time trailer_nr or total_nr needs to get
+	 * updated.
+	 */
+	int ok_for_trailer_block;
+};
+
+/*
+ * A single trailer block, composed of a list of trailers (and possibly
+ * non-trailers), parsed from some input text. The input text is considered to
+ * have trailers if at least 25% of the lines are trailers; this is called a
+ * "trailer block". Note that a valid trailer block may contain duplicate
+ * trailers (with the exact same keys).
+ */
+struct trailer_block {
+	/*
+	 * Source text where this trailer block was found.
+	 */
+	const char *source;
+
+	/*
+	 * Start and end locations of the source text where this trailer block
+	 * can be found. These are offsets from the beginning of the source
+	 * text.
+	 *
+	 * If this block does not contain any trailers, then these offsets are
+	 * 0.
+	 */
+	size_t start;
+	size_t end;
+
+	/*
+	 * True if there is a blank line before the location pointed to by
+	 * "start" above.
+	 */
+	int blank_line_before_start;
+
+	/*
+	 * Parsed trailer block, as a list of trailers (and possibly
+	 * non-trailers).
+	 */
+	struct trailers *trailers;
+};
+
+/*
+ * This is like "trailer", but it describes how to construct one, so that it can
+ * be injected into some other destination trailer block.
+ *
+ * The val_* fields are mutually exclusive with each other.
+ */
+struct trailer_injector {
+	char *key;
+
+	char separator;
+
+	/*
+	 * Value constructor. Execute this function to construct the value when
+	 * we need to perform the injection of this specific trailer.
+	 */
+	char *(*mk_val)(void *);
+
+	/*
+	 * These enums decide whether we should continue injecting the trailer
+	 * or to abort injection and leave the destination trailer block as is.
+	 * Note that a trailer cannot be both existing and missing from the
+	 * destination trailer block at the same time, so in a sense these enums
+	 * are always mutually exclusive to each other, even if we end up
+	 * setting both fields.
+	 */
+	enum trailer_if_exists action_if_exists;
+	enum trailer_if_missing action_if_missing;
+
+	/* Where to inject this trailer inside the trailer block. */
+	enum trailer_where desired_location;
+};
+
 struct conf_info {
 	char *name;
 	char *key;

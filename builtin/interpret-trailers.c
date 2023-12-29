@@ -140,10 +140,11 @@ static void interpret_trailers(const char *file,
 {
 	LIST_HEAD(head);
 	struct strbuf sb = STRBUF_INIT;
+	struct strbuf trailer_block = STRBUF_INIT;
 	struct trailer_info info;
 	FILE *outfile = stdout;
 
-	ensure_configured();
+	trailer_config_init();
 
 	read_input_file(&sb, file);
 
@@ -169,9 +170,12 @@ static void interpret_trailers(const char *file,
 		process_trailers_lists(&head, &arg_head);
 	}
 
-	print_all(outfile, &head, opts);
+	/* Print trailer block. */
+	format_trailers(&trailer_block, &head, opts);
+	fwrite(trailer_block.buf, 1, trailer_block.len, outfile);
+	strbuf_release(&trailer_block);
 
-	free_all(&head);
+	free_trailers(&head);
 	trailer_info_release(&info);
 
 	/* Print the lines after the trailers as is */

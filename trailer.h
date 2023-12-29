@@ -99,11 +99,11 @@ void trailer_info_get(struct trailer_info *info, const char *str,
 
 void trailer_info_release(struct trailer_info *info);
 
-void ensure_configured(void);
-void print_all(FILE *outfile, struct list_head *head,
-	       const struct process_trailer_options *opts);
-void free_all(struct list_head *head);
+void trailer_config_init(void);
+void free_trailers(struct list_head *trailers);
 
+void format_trailers(struct strbuf *out, struct list_head *head,
+		     const struct process_trailer_options *opts);
 /*
  * Format the trailers from the commit msg "msg" into the strbuf "out".
  * Note two caveats about "opts":
@@ -111,7 +111,7 @@ void free_all(struct list_head *head);
  *   - this is primarily a helper for pretty.c, and not
  *     all of the flags are supported.
  *
- *   - this differs from process_trailers slightly in that we always format
+ *   - this differs from format_trailers slightly in that we always format
  *     only the trailer block itself, even if the "only_trailers" option is not
  *     set.
  */

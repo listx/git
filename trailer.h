@@ -81,14 +81,28 @@ struct process_trailer_options {
 
 #define PROCESS_TRAILER_OPTIONS_INIT {0}
 
-void process_trailers(const char *file,
-		      const struct process_trailer_options *opts,
-		      struct list_head *new_trailer_head);
+void parse_trailers_from_config(struct list_head *config_head);
+
+void parse_trailers_from_command_line_args(struct list_head *arg_head,
+					   struct list_head *new_trailer_head);
+
+void process_trailers_lists(struct list_head *head,
+			    struct list_head *arg_head);
+
+void parse_trailers(struct trailer_info *info,
+		    const char *str,
+		    struct list_head *head,
+		    const struct process_trailer_options *opts);
 
 void trailer_info_get(struct trailer_info *info, const char *str,
 		      const struct process_trailer_options *opts);
 
 void trailer_info_release(struct trailer_info *info);
+
+void ensure_configured(void);
+void print_all(FILE *outfile, struct list_head *head,
+	       const struct process_trailer_options *opts);
+void free_all(struct list_head *head);
 
 /*
  * Format the trailers from the commit msg "msg" into the strbuf "out".

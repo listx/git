@@ -47,10 +47,14 @@ static int option_parse_if_missing(const struct option *opt,
 
 static char *cl_separators;
 
-static int option_parse_trailer(const struct option *opt,
-				   const char *arg, int unset)
+/*
+ * Interpret "--trailer ..." as trailer templates (trailers we want to add into
+ * the input text).
+ */
+static int option_parse_trailer_template(const struct option *opt,
+					 const char *arg, int unset)
 {
-	struct list_head *trailers = opt->value;
+	struct list_head *templates = opt->value;
 	struct strbuf tok = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 	const struct trailer_conf *conf;
@@ -58,7 +62,7 @@ static int option_parse_trailer(const struct option *opt,
 	ssize_t separator_pos;
 
 	if (unset) {
-		free_new_trailers(trailers);
+		free_trailer_templates(templates);
 		return 0;
 	}
 
@@ -75,10 +79,10 @@ static int option_parse_trailer(const struct option *opt,
 		 */
 		trailer_conf_set(where, if_exists, if_missing, conf_current);
 
-		trailer_add_arg_item(strbuf_detach(&tok, NULL),
+		add_trailer_template(strbuf_detach(&tok, NULL),
 				     strbuf_detach(&val, NULL),
 				     conf_current,
-				     trailers);
+				     templates);
 	} else {
 		struct strbuf sb = STRBUF_INIT;
 		strbuf_addstr(&sb, arg);
@@ -148,10 +152,10 @@ static void read_input_file(struct strbuf *sb, const char *file)
 }
 
 static void interpret_trailers(const struct process_trailer_options *opts,
-			       struct list_head *arg_trailers,
+			       struct list_head *templates,
 			       const char *file)
 {
-	LIST_HEAD(head);
+	LIST_HEAD(trailers_from_sb);
 	struct strbuf sb = STRBUF_INIT;
 	struct strbuf tb = STRBUF_INIT;
 	struct trailer_block *trailer_block;
@@ -162,7 +166,7 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 	if (opts->in_place)
 		outfile = create_in_place_tempfile(file);
 
-	trailer_block = parse_trailers(opts, sb.buf, &head);
+	trailer_block = parse_trailers(opts, sb.buf, &trailers_from_sb);
 
 	/* Print the lines before the trailer block */
 	if (!opts->only_trailers)
@@ -173,15 +177,15 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 
 
 	if (!opts->only_input) {
-		process_trailers_lists(&head, arg_trailers);
+		apply_trailer_templates(templates, &trailers_from_sb);
 	}
 
 	/* Print trailer block. */
-	format_trailers(opts, &head, &tb);
+	format_trailers(opts, &trailers_from_sb, &tb);
 	fwrite(tb.buf, 1, tb.len, outfile);
 	strbuf_release(&tb);
 
-	free_trailers(&head);
+	free_trailers(&trailers_from_sb);
 
 	/* Print the lines after the trailer block as is */
 	if (!opts->only_trailers)
@@ -199,8 +203,8 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 {
 	struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
-	LIST_HEAD(configured_trailers);
-	LIST_HEAD(arg_trailers);
+	LIST_HEAD(configured_templates);
+	LIST_HEAD(templates);
 
 	struct option options[] = {
 		OPT_BOOL(0, "in-place", &opts.in_place, N_("edit files in place")),
@@ -219,8 +223,8 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 		OPT_CALLBACK_F(0, "parse", &opts, NULL, N_("alias for --only-trailers --only-input --unfold"),
 			PARSE_OPT_NOARG | PARSE_OPT_NONEG, parse_opt_parse),
 		OPT_BOOL(0, "no-divider", &opts.no_divider, N_("do not treat \"---\" as the end of input")),
-		OPT_CALLBACK(0, "trailer", &arg_trailers, N_("trailer"),
-				N_("trailer(s) to add"), option_parse_trailer),
+		OPT_CALLBACK(0, "trailer", &templates, N_("trailer"),
+				N_("trailer(s) to add"), option_parse_trailer_template),
 		OPT_END()
 	};
 
@@ -228,7 +232,7 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 	trailer_config_init();
 
 	if (!opts.only_input) {
-		parse_trailers_from_config(&configured_trailers);
+		parse_trailer_templates_from_config(&configured_templates);
 	}
 
 	/*
@@ -242,25 +246,25 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 
 	free(cl_separators);
 
-	if (opts.only_input && !list_empty(&arg_trailers))
+	if (opts.only_input && !list_empty(&templates))
 		usage_msg_opt(
 			_("--trailer with --only-input does not make sense"),
 			git_interpret_trailers_usage,
 			options);
 
-	list_splice(&configured_trailers, &arg_trailers);
+	list_splice(&configured_templates, &templates);
 
 	if (argc) {
 		int i;
 		for (i = 0; i < argc; i++)
-			interpret_trailers(&opts, &arg_trailers, argv[i]);
+			interpret_trailers(&opts, &templates, argv[i]);
 	} else {
 		if (opts.in_place)
 			die(_("no input file given for in-place editing"));
-		interpret_trailers(&opts, &arg_trailers, NULL);
+		interpret_trailers(&opts, &templates, NULL);
 	}
 
-	free_new_trailers(&arg_trailers);
+	free_trailer_templates(&templates);
 
 	return 0;
 }

@@ -43,8 +43,8 @@ void duplicate_trailer_conf(struct trailer_conf *dst,
 
 const char *trailer_default_separators(void);
 
-void trailer_add_arg_item(char *tok, char *val, const struct trailer_conf *conf,
-			  struct list_head *arg_head);
+void add_trailer_template(char *tok, char *val, const struct trailer_conf *conf,
+			  struct list_head *templates);
 
 struct process_trailer_options {
 	int in_place;
@@ -63,10 +63,9 @@ struct process_trailer_options {
 
 #define PROCESS_TRAILER_OPTIONS_INIT {0}
 
-void parse_trailers_from_config(struct list_head *config_head);
+void parse_trailer_templates_from_config(struct list_head *config_head);
 
-void process_trailers_lists(struct list_head *head,
-			    struct list_head *arg_head);
+void apply_trailer_templates(struct list_head *templates, struct list_head *trailers_head);
 
 ssize_t find_separator(const char *line, const char *separators);
 
@@ -89,7 +88,7 @@ void format_trailers(const struct process_trailer_options *opts,
 		     struct list_head *trailers,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
-void free_new_trailers(struct list_head *);
+void free_trailer_templates(struct list_head *);
 
 /*
  * Convenience function to format the trailers from the commit msg "msg" into

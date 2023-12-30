@@ -40,8 +40,8 @@ void duplicate_conf(struct conf_info *dst, const struct conf_info *src);
 
 const char *default_separators(void);
 
-void add_arg_item(char *tok, char *val, const struct conf_info *conf,
-		  struct list_head *arg_head);
+void add_trailer_injector(char *tok, char *val, const struct conf_info *conf,
+			  struct list_head *injectors);
 
 struct process_trailer_options {
 	int in_place;
@@ -60,10 +60,9 @@ struct process_trailer_options {
 
 #define PROCESS_TRAILER_OPTIONS_INIT {0}
 
-void parse_trailers_from_config(struct list_head *config_head);
+void parse_trailer_injectors_from_config(struct list_head *config_head);
 
-void process_trailers_lists(struct list_head *head,
-			    struct list_head *arg_head);
+void apply_trailer_injectors(struct list_head *injectors, struct list_head *trailers_head);
 
 ssize_t find_separator(const char *line, const char *separators);
 
@@ -86,7 +85,7 @@ void trailer_block_release(struct trailer_block *trailer_block);
 
 void trailer_config_init(void);
 void free_trailers(struct list_head *trailers);
-void new_trailers_clear(struct list_head *trailers);
+void free_trailer_injectors(struct list_head *trailer_injectors);
 
 void format_trailers(struct list_head *head,
 		     const struct process_trailer_options *opts,

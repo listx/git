@@ -254,22 +254,17 @@ static char *run_template_command(struct trailer_conf *conf, const char *arg)
  * Prepare the template by running the command (if any) requested by the
  * template in order to populate the template's value field.
  */
-static void prepare_value_of(struct trailer_item *in_tok,
-			     struct trailer_template *template)
+static void prepare_value_of(struct trailer_template *template)
 {
 	if (template->conf.command || template->conf.cmd) {
 		/*
 		 * Determine argument to pass into the command.
 		 */
 		const char *arg;
-		if (template->value && template->value[0]) {
+		if (template->value && template->value[0])
 			arg = template->value;
-		} else {
-			if (in_tok && in_tok->value)
-				arg = xstrdup(in_tok->value);
-			else
-				arg = xstrdup("");
-		}
+		else
+			arg = xstrdup("");
 
 		template->value = run_template_command(&template->conf, arg);
 		free((char *)arg);
@@ -286,24 +281,24 @@ static void maybe_add_if_exists(struct trailer_template *template,
 		free_template(template);
 		break;
 	case EXISTS_REPLACE:
-		prepare_value_of(in_tok, template);
+		prepare_value_of(template);
 		apply(template, on_tok);
 		list_del(&in_tok->list);
 		free_trailer_item(in_tok);
 		break;
 	case EXISTS_ADD:
-		prepare_value_of(in_tok, template);
+		prepare_value_of(template);
 		apply(template, on_tok);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
-		prepare_value_of(in_tok, template);
+		prepare_value_of(template);
 		if (check_if_different(template, in_tok, trailers, 1))
 			apply(template, on_tok);
 		else
 			free_template(template);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
-		prepare_value_of(in_tok, template);
+		prepare_value_of(template);
 		if (check_if_different(template, on_tok, trailers, 0))
 			apply(template, on_tok);
 		else
@@ -327,7 +322,7 @@ static void maybe_add_if_missing(struct trailer_template *template,
 		break;
 	case MISSING_ADD:
 		where = template->conf.where;
-		prepare_value_of(NULL, template);
+		prepare_value_of(template);
 		to_add = trailer_from(template);
 		if (after_or_end(where))
 			list_add_tail(&to_add->list, trailers);

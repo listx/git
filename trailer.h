@@ -102,21 +102,16 @@ void trailer_info_release(struct trailer_info *info);
 void trailer_config_init(void);
 void free_trailers(struct list_head *trailers);
 
-void format_trailers(struct strbuf *out, struct list_head *head,
-		     const struct process_trailer_options *opts);
+void format_trailers(struct list_head *head,
+		     const struct process_trailer_options *opts,
+		     struct strbuf *out);
 /*
- * Format the trailers from the commit msg "msg" into the strbuf "out".
- * Note two caveats about "opts":
- *
- *   - this is primarily a helper for pretty.c, and not
- *     all of the flags are supported.
- *
- *   - this differs from format_trailers slightly in that we always format
- *     only the trailer block itself, even if the "only_trailers" option is not
- *     set.
+ * Convenience function to format the trailers from the commit msg "msg" into
+ * the strbuf "out". Reuses format_trailers internally.
  */
-void format_trailers_from_commit(struct strbuf *out, const char *msg,
-				 const struct process_trailer_options *opts);
+void format_trailers_from_commit(const char *msg,
+				 const struct process_trailer_options *opts,
+				 struct strbuf *out);
 
 /*
  * An interface for iterating over the trailers found in a particular commit

@@ -171,7 +171,7 @@ static void interpret_trailers(const char *file,
 	}
 
 	/* Print trailer block. */
-	format_trailers(&trailer_block, &head, opts);
+	format_trailers(&head, opts, &trailer_block);
 	fwrite(trailer_block.buf, 1, trailer_block.len, outfile);
 	strbuf_release(&trailer_block);
 

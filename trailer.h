@@ -5,6 +5,7 @@
 #include "strbuf.h"
 
 struct trailer_block;
+struct trailer_conf;
 struct strvec;
 
 enum trailer_where {
@@ -46,6 +47,12 @@ struct new_trailer_item {
 	enum trailer_if_missing if_missing;
 };
 
+void duplicate_trailer_conf(struct trailer_conf *dst,
+			    const struct trailer_conf *src);
+void trailer_add_arg_item(struct list_head *arg_head, char *tok, char *val,
+			  const struct trailer_conf *conf,
+			  const struct new_trailer_item *new_trailer_item);
+
 struct process_trailer_options {
 	int in_place;
 	int trim_empty;
@@ -70,6 +77,8 @@ void parse_trailers_from_command_line_args(struct list_head *arg_head,
 
 void process_trailers_lists(struct list_head *head,
 			    struct list_head *arg_head);
+
+ssize_t find_separator(const char *line, const char *separators);
 
 /*
  * Given some input string "str", return a pointer to an opaque trailer_block
@@ -101,6 +110,10 @@ void process_trailers_lists(struct list_head *head,
  * any synchronization between the two. In the future we should be able to
  * reduce the duplication and use just the linked list.
  */
+void parse_trailer(const char *line, ssize_t separator_pos,
+		   struct strbuf *tok, struct strbuf *val,
+		   const struct trailer_conf **);
+
 struct trailer_block *parse_trailers(const struct process_trailer_options *,
 				     const char *str,
 				     struct list_head *trailer_objects);

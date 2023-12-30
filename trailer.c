@@ -55,14 +55,14 @@ struct trailer_item {
 	char *value;
 };
 
-struct arg_item {
+struct trailer_injector {
 	struct list_head list;
 	char *token;
 	char *value;
 	struct conf_info conf;
 };
 
-static LIST_HEAD(conf_head);
+static LIST_HEAD(injectors_from_conf);
 
 static char *separators = ":";
 
@@ -105,7 +105,7 @@ static size_t token_len_without_separator(const char *token, size_t len)
 	return len;
 }
 
-static int same_token(struct trailer_item *a, struct arg_item *b)
+static int same_token(struct trailer_item *a, struct trailer_injector *b)
 {
 	size_t a_len, b_len, min_len;
 
@@ -119,12 +119,12 @@ static int same_token(struct trailer_item *a, struct arg_item *b)
 	return !strncasecmp(a->token, b->token, min_len);
 }
 
-static int same_value(struct trailer_item *a, struct arg_item *b)
+static int same_value(struct trailer_item *a, struct trailer_injector *b)
 {
 	return !strcasecmp(a->value, b->value);
 }
 
-static int same_trailer(struct trailer_item *a, struct arg_item *b)
+static int same_trailer(struct trailer_item *a, struct trailer_injector *b)
 {
 	return same_token(a, b) && same_value(a, b);
 }
@@ -151,15 +151,15 @@ static void free_trailer_item(struct trailer_item *item)
 	free(item);
 }
 
-static void free_arg_item(struct arg_item *item)
+static void free_injector(struct trailer_injector *injector)
 {
-	free(item->conf.name);
-	free(item->conf.key);
-	free(item->conf.command);
-	free(item->conf.cmd);
-	free(item->token);
-	free(item->value);
-	free(item);
+	free(injector->conf.name);
+	free(injector->conf.key);
+	free(injector->conf.command);
+	free(injector->conf.cmd);
+	free(injector->token);
+	free(injector->value);
+	free(injector);
 }
 
 static char last_non_space_char(const char *s)
@@ -171,36 +171,36 @@ static char last_non_space_char(const char *s)
 	return '\0';
 }
 
-static struct trailer_item *trailer_from_arg(struct arg_item *arg_tok)
+static struct trailer_item *trailer_from(struct trailer_injector *injector)
 {
 	struct trailer_item *new_item = xcalloc(1, sizeof(*new_item));
-	new_item->token = arg_tok->token;
-	new_item->value = arg_tok->value;
-	arg_tok->token = arg_tok->value = NULL;
-	free_arg_item(arg_tok);
+	new_item->token = injector->token;
+	new_item->value = injector->value;
+	injector->token = injector->value = NULL;
+	free_injector(injector);
 	return new_item;
 }
 
-static void add_arg_to_input_list(struct trailer_item *on_tok,
-				  struct arg_item *arg_tok)
+static void apply(struct trailer_injector *injector,
+		  struct trailer_item *on_tok)
 {
-	int aoe = after_or_end(arg_tok->conf.where);
-	struct trailer_item *to_add = trailer_from_arg(arg_tok);
+	int aoe = after_or_end(injector->conf.where);
+	struct trailer_item *to_add = trailer_from(injector);
 	if (aoe)
 		list_add(&to_add->list, &on_tok->list);
 	else
 		list_add_tail(&to_add->list, &on_tok->list);
 }
 
-static int check_if_different(struct trailer_item *in_tok,
-			      struct arg_item *arg_tok,
-			      int check_all,
-			      struct list_head *head)
+static int check_if_different(struct trailer_injector *injector,
+			      struct trailer_item *in_tok,
+			      struct list_head *head,
+			      int check_all)
 {
-	enum trailer_where where = arg_tok->conf.where;
+	enum trailer_where where = injector->conf.where;
 	struct list_head *next_head;
 	do {
-		if (same_trailer(in_tok, arg_tok))
+		if (same_trailer(in_tok, injector))
 			return 0;
 		/*
 		 * if we want to add a trailer after another one,
@@ -215,7 +215,7 @@ static int check_if_different(struct trailer_item *in_tok,
 	return 1;
 }
 
-static char *apply_command(struct conf_info *conf, const char *arg)
+static char *run_injector_command(struct conf_info *conf, const char *arg)
 {
 	struct strbuf cmd = STRBUF_INIT;
 	struct strbuf buf = STRBUF_INIT;
@@ -250,133 +250,142 @@ static char *apply_command(struct conf_info *conf, const char *arg)
 	return result;
 }
 
-static void apply_item_command(struct trailer_item *in_tok, struct arg_item *arg_tok)
+/*
+ * Prepare the injector by running the command (if any) requested by the
+ * injector in order to populate the injector's value field.
+ */
+static void prepare(struct trailer_item *in_tok,
+		    struct trailer_injector *injector)
 {
-	if (arg_tok->conf.command || arg_tok->conf.cmd) {
+	if (injector->conf.command || injector->conf.cmd) {
+		/*
+		 * Determine argument to pass into the command.
+		 */
 		const char *arg;
-		if (arg_tok->value && arg_tok->value[0]) {
-			arg = arg_tok->value;
+		if (injector->value && injector->value[0]) {
+			arg = injector->value;
 		} else {
 			if (in_tok && in_tok->value)
 				arg = xstrdup(in_tok->value);
 			else
 				arg = xstrdup("");
 		}
-		arg_tok->value = apply_command(&arg_tok->conf, arg);
+
+		injector->value = run_injector_command(&injector->conf, arg);
 		free((char *)arg);
 	}
 }
 
-static void apply_arg_if_exists(struct trailer_item *in_tok,
-				struct arg_item *arg_tok,
-				struct trailer_item *on_tok,
-				struct list_head *head)
+static void maybe_inject_if_exists(struct trailer_injector *injector,
+				   struct trailer_item *in_tok,
+				   struct trailer_item *on_tok,
+				   struct list_head *trailers)
 {
-	switch (arg_tok->conf.if_exists) {
+	switch (injector->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
-		free_arg_item(arg_tok);
+		free_injector(injector);
 		break;
 	case EXISTS_REPLACE:
-		apply_item_command(in_tok, arg_tok);
-		add_arg_to_input_list(on_tok, arg_tok);
+		prepare(in_tok, injector);
+		apply(injector, on_tok);
 		list_del(&in_tok->list);
 		free_trailer_item(in_tok);
 		break;
 	case EXISTS_ADD:
-		apply_item_command(in_tok, arg_tok);
-		add_arg_to_input_list(on_tok, arg_tok);
+		prepare(in_tok, injector);
+		apply(injector, on_tok);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
-		apply_item_command(in_tok, arg_tok);
-		if (check_if_different(in_tok, arg_tok, 1, head))
-			add_arg_to_input_list(on_tok, arg_tok);
+		prepare(in_tok, injector);
+		if (check_if_different(injector, in_tok, trailers, 1))
+			apply(injector, on_tok);
 		else
-			free_arg_item(arg_tok);
+			free_injector(injector);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
-		apply_item_command(in_tok, arg_tok);
-		if (check_if_different(on_tok, arg_tok, 0, head))
-			add_arg_to_input_list(on_tok, arg_tok);
+		prepare(in_tok, injector);
+		if (check_if_different(injector, on_tok, trailers, 0))
+			apply(injector, on_tok);
 		else
-			free_arg_item(arg_tok);
+			free_injector(injector);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
-		    arg_tok->conf.if_exists);
+		    injector->conf.if_exists);
 	}
 }
 
-static void apply_arg_if_missing(struct list_head *head,
-				 struct arg_item *arg_tok)
+static void maybe_inject_if_missing(struct trailer_injector *injector,
+				    struct list_head *trailers)
 {
 	enum trailer_where where;
 	struct trailer_item *to_add;
 
-	switch (arg_tok->conf.if_missing) {
+	switch (injector->conf.if_missing) {
 	case MISSING_DO_NOTHING:
-		free_arg_item(arg_tok);
+		free_injector(injector);
 		break;
 	case MISSING_ADD:
-		where = arg_tok->conf.where;
-		apply_item_command(NULL, arg_tok);
-		to_add = trailer_from_arg(arg_tok);
+		where = injector->conf.where;
+		prepare(NULL, injector);
+		to_add = trailer_from(injector);
 		if (after_or_end(where))
-			list_add_tail(&to_add->list, head);
+			list_add_tail(&to_add->list, trailers);
 		else
-			list_add(&to_add->list, head);
+			list_add(&to_add->list, trailers);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
-		    arg_tok->conf.if_missing);
+		    injector->conf.if_missing);
 	}
 }
 
-static int find_same_and_apply_arg(struct list_head *head,
-				   struct arg_item *arg_tok)
+static int find_same_and_apply_arg(struct trailer_injector *injector,
+				   struct list_head *trailers)
 {
 	struct list_head *pos;
 	struct trailer_item *in_tok;
 	struct trailer_item *on_tok;
 
-	enum trailer_where where = arg_tok->conf.where;
+	enum trailer_where where = injector->conf.where;
 	int middle = (where == WHERE_AFTER) || (where == WHERE_BEFORE);
 	int backwards = after_or_end(where);
 	struct trailer_item *start_tok;
 
-	if (list_empty(head))
+	if (list_empty(trailers))
 		return 0;
 
-	start_tok = list_entry(backwards ? head->prev : head->next,
+	start_tok = list_entry(backwards ? trailers->prev : trailers->next,
 			       struct trailer_item,
 			       list);
 
-	list_for_each_dir(pos, head, backwards) {
+	list_for_each_dir(pos, trailers, backwards) {
 		in_tok = list_entry(pos, struct trailer_item, list);
-		if (!same_token(in_tok, arg_tok))
+		if (!same_token(in_tok, injector))
 			continue;
 		on_tok = middle ? in_tok : start_tok;
-		apply_arg_if_exists(in_tok, arg_tok, on_tok, head);
+		maybe_inject_if_exists(injector, in_tok, on_tok, trailers);
 		return 1;
 	}
 	return 0;
 }
 
-void process_trailers_lists(struct list_head *head,
-			    struct list_head *arg_head)
+void apply_trailer_injectors(struct list_head *injectors,
+			     struct list_head *trailers)
 {
 	struct list_head *pos, *p;
-	struct arg_item *arg_tok;
+	struct trailer_injector *injector;
 
-	list_for_each_safe(pos, p, arg_head) {
+	list_for_each_safe(pos, p, injectors) {
 		int applied = 0;
-		arg_tok = list_entry(pos, struct arg_item, list);
+		injector = list_entry(pos, struct trailer_injector, list);
 
 		list_del(pos);
 
-		applied = find_same_and_apply_arg(head, arg_tok);
+		applied = find_same_and_apply_arg(injector, trailers);
 
 		if (!applied)
-			apply_arg_if_missing(head, arg_tok);
+			maybe_inject_if_missing(injector, trailers);
 	}
 }
 
@@ -459,26 +468,26 @@ void duplicate_conf(struct conf_info *dst, const struct conf_info *src)
 	dst->cmd = xstrdup_or_null(src->cmd);
 }
 
-static struct arg_item *get_conf_item(const char *name)
+static struct trailer_injector *get_or_add_injector_by(const char *name)
 {
 	struct list_head *pos;
-	struct arg_item *item;
+	struct trailer_injector *injector;
 
-	/* Look up item with same name */
-	list_for_each(pos, &conf_head) {
-		item = list_entry(pos, struct arg_item, list);
-		if (!strcasecmp(item->conf.name, name))
-			return item;
+	/* Look up injector with same name */
+	list_for_each(pos, &injectors_from_conf) {
+		injector = list_entry(pos, struct trailer_injector, list);
+		if (!strcasecmp(injector->conf.name, name))
+			return injector;
 	}
 
-	/* Item does not already exists, create it */
-	CALLOC_ARRAY(item, 1);
-	duplicate_conf(&item->conf, &default_conf_info);
-	item->conf.name = xstrdup(name);
+	/* Injector does not already exists, create it */
+	CALLOC_ARRAY(injector, 1);
+	duplicate_conf(&injector->conf, &default_conf_info);
+	injector->conf.name = xstrdup(name);
 
-	list_add_tail(&item->list, &conf_head);
+	list_add_tail(&injector->list, &injectors_from_conf);
 
-	return item;
+	return injector;
 }
 
 enum trailer_info_type { TRAILER_KEY, TRAILER_COMMAND, TRAILER_CMD,
@@ -536,7 +545,7 @@ static int git_trailer_config(const char *conf_key, const char *value,
 			      void *cb UNUSED)
 {
 	const char *trailer_item, *variable_name;
-	struct arg_item *item;
+	struct trailer_injector *injector;
 	struct conf_info *conf;
 	char *name = NULL;
 	enum trailer_info_type type;
@@ -561,8 +570,8 @@ static int git_trailer_config(const char *conf_key, const char *value,
 	if (!name)
 		return 0;
 
-	item = get_conf_item(name);
-	conf = &item->conf;
+	injector = get_or_add_injector_by(name);
+	conf = &injector->conf;
 	free(name);
 
 	switch (type) {
@@ -619,20 +628,20 @@ void trailer_config_init(void)
 	configured = 1;
 }
 
-static const char *token_from_item(struct arg_item *item, char *tok)
+static const char *token_from_injector(struct trailer_injector *injector, char *tok)
 {
-	if (item->conf.key)
-		return item->conf.key;
+	if (injector->conf.key)
+		return injector->conf.key;
 	if (tok)
 		return tok;
-	return item->conf.name;
+	return injector->conf.name;
 }
 
-static int token_matches_item(const char *tok, struct arg_item *item, size_t tok_len)
+static int token_matches_item(const char *tok, struct trailer_injector *injector, size_t tok_len)
 {
-	if (!strncasecmp(tok, item->conf.name, tok_len))
+	if (!strncasecmp(tok, injector->conf.name, tok_len))
 		return 1;
-	return item->conf.key ? !strncasecmp(tok, item->conf.key, tok_len) : 0;
+	return injector->conf.key ? !strncasecmp(tok, injector->conf.key, tok_len) : 0;
 }
 
 /*
@@ -678,7 +687,7 @@ void parse_trailer(const char *line, ssize_t separator_pos,
 		   struct strbuf *tok, struct strbuf *val,
 		   const struct conf_info **conf)
 {
-	struct arg_item *item;
+	struct trailer_injector *injector;
 	size_t tok_len;
 	struct list_head *pos;
 
@@ -696,13 +705,13 @@ void parse_trailer(const char *line, ssize_t separator_pos,
 	tok_len = token_len_without_separator(tok->buf, tok->len);
 	if (conf)
 		*conf = &default_conf_info;
-	list_for_each(pos, &conf_head) {
-		item = list_entry(pos, struct arg_item, list);
-		if (token_matches_item(tok->buf, item, tok_len)) {
+	list_for_each(pos, &injectors_from_conf) {
+		injector = list_entry(pos, struct trailer_injector, list);
+		if (token_matches_item(tok->buf, injector, tok_len)) {
 			char *tok_buf = strbuf_detach(tok, NULL);
 			if (conf)
-				*conf = &item->conf;
-			strbuf_addstr(tok, token_from_item(item, tok_buf));
+				*conf = &injector->conf;
+			strbuf_addstr(tok, token_from_injector(injector, tok_buf));
 			free(tok_buf);
 			break;
 		}
@@ -719,30 +728,27 @@ static struct trailer_item *add_trailer_item(struct list_head *head, char *tok,
 	return new_item;
 }
 
-void add_arg_item(char *tok, char *val, const struct conf_info *conf,
-		  struct list_head *arg_head)
-
+void add_trailer_injector(char *tok, char *val, const struct conf_info *conf,
+			  struct list_head *injectors)
 {
-	struct arg_item *new_item = xcalloc(1, sizeof(*new_item));
-	new_item->token = tok;
-	new_item->value = val;
-	duplicate_conf(&new_item->conf, conf);
-	list_add_tail(&new_item->list, arg_head);
+	struct trailer_injector *injector = xcalloc(1, sizeof(*injector));
+	injector->token = tok;
+	injector->value = val;
+	duplicate_conf(&injector->conf, conf);
+	list_add_tail(&injector->list, injectors);
 }
 
-void parse_trailers_from_config(struct list_head *config_head)
+void parse_trailer_injectors_from_config(struct list_head *config_head)
 {
-	struct arg_item *item;
+	struct trailer_injector *injector;
 	struct list_head *pos;
 
-	/* Add an arg item for each configured trailer with a command */
-	list_for_each(pos, &conf_head) {
-		item = list_entry(pos, struct arg_item, list);
-		if (item->conf.command)
-			add_arg_item(xstrdup(token_from_item(item, NULL)),
-				     xstrdup(""),
-				     &item->conf,
-				     config_head);
+	/* Read in configured trailers as injectors. */
+	list_for_each(pos, &injectors_from_conf) {
+		injector = list_entry(pos, struct trailer_injector, list);
+		if (injector->conf.command)
+			add_trailer_injector(xstrdup(token_from_injector(injector, NULL)),
+					     xstrdup(""), &injector->conf, config_head);
 	}
 }
 
@@ -854,7 +860,7 @@ static size_t find_trailer_block_start(const char *buf, size_t len)
 	 * Get the start of the trailers by looking starting from the end for a
 	 * blank line before a set of non-blank lines that (i) are all
 	 * trailers, or (ii) contains at least one Git-generated trailer and
-	 * consists of at least 25% trailers.
+	 * consists of at least 25% configured trailers.
 	 */
 	for (l = last_line(buf, len);
 	     l >= end_of_title;
@@ -898,10 +904,16 @@ static size_t find_trailer_block_start(const char *buf, size_t len)
 			possible_continuation_lines = 0;
 			if (recognized_prefix)
 				continue;
-			list_for_each(pos, &conf_head) {
-				struct arg_item *item;
-				item = list_entry(pos, struct arg_item, list);
-				if (token_matches_item(bol, item,
+			/*
+			 * The injectors here are not used for actually
+			 * injecting trailers anywhere, but instead to help us
+			 * identify trailer lines by comparing their keys with
+			 * those found in configured trailers.
+			 */
+			list_for_each(pos, &injectors_from_conf) {
+				struct trailer_injector *injector;
+				injector = list_entry(pos, struct trailer_injector, list);
+				if (token_matches_item(bol, injector,
 						       separator_pos)) {
 					recognized_prefix = 1;
 					break;
@@ -1129,13 +1141,13 @@ void free_trailers(struct list_head *head)
 	}
 }
 
-void new_trailers_clear(struct list_head *trailers)
+void free_trailer_injectors(struct list_head *trailer_injectors)
 {
 	struct list_head *pos, *p;
 
-	list_for_each_safe(pos, p, trailers) {
+	list_for_each_safe(pos, p, trailer_injectors) {
 		list_del(pos);
-		free_arg_item(list_entry(pos, struct arg_item, list));
+		free_injector(list_entry(pos, struct trailer_injector, list));
 	}
 }
 

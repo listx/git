@@ -45,7 +45,7 @@ static int option_parse_if_missing(const struct option *opt,
 	return trailer_set_if_missing(opt->value, arg);
 }
 
-static void new_trailers_clear(struct list_head *trailers)
+static void free_new_trailers(struct list_head *trailers)
 {
 	struct list_head *pos, *tmp;
 	struct new_trailer_item *item;
@@ -64,7 +64,7 @@ static int option_parse_trailer(const struct option *opt,
 	struct new_trailer_item *item;
 
 	if (unset) {
-		new_trailers_clear(trailers);
+		free_new_trailers(trailers);
 		return 0;
 	}
 
@@ -238,7 +238,7 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 		interpret_trailers(&opts, &trailers, NULL);
 	}
 
-	new_trailers_clear(&trailers);
+	free_new_trailers(&trailers);
 
 	return 0;
 }

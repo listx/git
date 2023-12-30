@@ -254,8 +254,7 @@ static char *run_injector_command(struct trailer_conf *conf, const char *arg)
  * Prepare the injector by running the command (if any) requested by the
  * injector in order to populate the injector's value field.
  */
-static void prepare_value_of(struct trailer_item *in_tok,
-			     struct trailer_injector *injector)
+static void prepare_value_of(struct trailer_injector *injector)
 {
 	if (injector->conf.command || injector->conf.cmd) {
 		/*
@@ -265,10 +264,7 @@ static void prepare_value_of(struct trailer_item *in_tok,
 		if (injector->value && injector->value[0]) {
 			arg = injector->value;
 		} else {
-			if (in_tok && in_tok->value)
-				arg = xstrdup(in_tok->value);
-			else
-				arg = xstrdup("");
+			arg = xstrdup("");
 		}
 
 		injector->value = run_injector_command(&injector->conf, arg);
@@ -286,24 +282,24 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 		free_injector(injector);
 		break;
 	case EXISTS_REPLACE:
-		prepare_value_of(in_tok, injector);
+		prepare_value_of(injector);
 		apply(injector, on_tok);
 		list_del(&in_tok->list);
 		free_trailer_item(in_tok);
 		break;
 	case EXISTS_ADD:
-		prepare_value_of(in_tok, injector);
+		prepare_value_of(injector);
 		apply(injector, on_tok);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
-		prepare_value_of(in_tok, injector);
+		prepare_value_of(injector);
 		if (check_if_different(injector, in_tok, trailers, 1))
 			apply(injector, on_tok);
 		else
 			free_injector(injector);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
-		prepare_value_of(in_tok, injector);
+		prepare_value_of(injector);
 		if (check_if_different(injector, on_tok, trailers, 0))
 			apply(injector, on_tok);
 		else
@@ -327,7 +323,7 @@ static void maybe_inject_if_missing(struct trailer_injector *injector,
 		break;
 	case MISSING_ADD:
 		where = injector->conf.where;
-		prepare_value_of(NULL, injector);
+		prepare_value_of(injector);
 		to_add = trailer_from(injector);
 		if (after_or_end(where))
 			list_add_tail(&to_add->list, trailers);

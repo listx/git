@@ -60,6 +60,7 @@ struct trailer_injector {
 	char *token;
 	char *value;
 	struct conf_info conf;
+	struct trailer_item *target;
 };
 
 static LIST_HEAD(injectors_from_conf);
@@ -250,10 +251,43 @@ static char *run_injector_command(struct conf_info *conf, const char *arg)
 }
 
 /*
- * Prepare the injector by running the command (if any) requested by the
- * injector in order to populate the injector's value field.
+ * Prepare the injector so that it is pointing to a new, blank trailer target
+ * (correctly positioned somewhere inside "trailers") which we would like to
+ * spray over (overwrite).
  */
-static void prepare(struct trailer_injector *injector)
+static void alloc_target_of(struct trailer_injector *injector,
+			    struct trailer_item *middle,
+			    struct list_head *trailers)
+{
+	struct trailer_item *target = xcalloc(1, sizeof(*target));
+
+	switch (injector->conf.where) {
+	case WHERE_START:
+		list_add(&target->list, trailers);
+		break;
+	case WHERE_BEFORE:
+		list_add(&target->list,
+			 middle ? middle->list.prev : trailers);
+		break;
+	case WHERE_AFTER:
+		list_add_tail(&target->list,
+			      middle ? middle->list.next : trailers);
+		break;
+	case WHERE_END:
+		list_add_tail(&target->list, trailers);
+		break;
+	default:
+		BUG("trailer.c: unhandled type %d", injector->conf.where);
+	}
+
+	injector->target = target;
+}
+
+/*
+ * Prepare the injector's value by running the command (if any) designated by
+ * the injector.
+ */
+static void prepare_value_of(struct trailer_injector *injector)
 {
 	if (injector->conf.command || injector->conf.cmd) {
 		/*
@@ -271,6 +305,16 @@ static void prepare(struct trailer_injector *injector)
 	}
 }
 
+/*
+ * Use the injector by "spraying" it at the target trailer, much like a can of
+ * spray paint.
+ */
+static void spray(struct trailer_injector *injector)
+{
+	injector->target->token = injector->token;
+	injector->target->value = injector->value;
+}
+
 static void maybe_inject_if_exists(struct trailer_injector *injector,
 				   struct trailer_item *in_tok,
 				   struct trailer_item *on_tok,
@@ -280,21 +324,21 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 	case EXISTS_DO_NOTHING:
 		break;
 	case EXISTS_REPLACE:
-		prepare(injector);
+		prepare_value_of(injector);
 		apply(injector, on_tok);
 		list_del(&in_tok->list);
 		break;
 	case EXISTS_ADD:
-		prepare(injector);
+		prepare_value_of(injector);
 		apply(injector, on_tok);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
-		prepare(injector);
+		prepare_value_of(injector);
 		if (check_if_different(injector, in_tok, trailers, 1))
 			apply(injector, on_tok);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
-		prepare(injector);
+		prepare_value_of(injector);
 		if (check_if_different(injector, on_tok, trailers, 0))
 			apply(injector, on_tok);
 		break;
@@ -315,7 +359,7 @@ static void maybe_inject_if_missing(struct trailer_injector *injector,
 		break;
 	case MISSING_ADD:
 		where = injector->conf.where;
-		prepare(injector);
+		prepare_value_of(injector);
 		to_add = trailer_from(injector);
 		if (after_or_end(where))
 			list_add_tail(&to_add->list, trailers);
@@ -474,6 +518,7 @@ static struct trailer_injector *get_or_add_injector_by(const char *name)
 	CALLOC_ARRAY(injector, 1);
 	duplicate_conf(&injector->conf, &default_conf_info);
 	injector->conf.name = xstrdup(name);
+	injector->target = NULL;
 
 	list_add_tail(&injector->list, &injectors_from_conf);
 

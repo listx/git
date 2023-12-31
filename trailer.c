@@ -60,6 +60,7 @@ struct trailer_injector {
 	char *token;
 	char *value;
 	struct trailer_conf conf;
+	struct trailer_item *target;
 };
 
 static LIST_HEAD(injectors_from_conf);
@@ -250,6 +251,39 @@ static char *run_injector_command(struct trailer_conf *conf, const char *arg)
 }
 
 /*
+ * Prepare the injector so that it is pointing to a new, blank trailer target
+ * (correctly positioned somewhere inside "trailers") which we would like to
+ * spray over (overwrite).
+ */
+static void alloc_target_of(struct trailer_injector *injector,
+			    struct trailer_item *middle,
+			    struct list_head *trailers)
+{
+	struct trailer_item *target = xcalloc(1, sizeof(*target));
+
+	switch (injector->conf.where) {
+	case WHERE_START:
+		list_add(&target->list, trailers);
+		break;
+	case WHERE_BEFORE:
+		list_add(&target->list,
+			 middle ? middle->list.prev : trailers);
+		break;
+	case WHERE_AFTER:
+		list_add_tail(&target->list,
+			      middle ? middle->list.next : trailers);
+		break;
+	case WHERE_END:
+		list_add_tail(&target->list, trailers);
+		break;
+	default:
+		BUG("trailer.c: unhandled type %d", injector->conf.where);
+	}
+
+	injector->target = target;
+}
+
+/*
  * Prepare the injector by running the command (if any) requested by the
  * injector in order to populate the injector's value field.
  */
@@ -269,6 +303,16 @@ static void prepare_value_of(struct trailer_injector *injector)
 		injector->value = run_injector_command(&injector->conf, arg);
 		free((char *)arg);
 	}
+}
+
+/*
+ * Use the injector by "spraying" it at the target trailer, like a can of
+ * spray paint.
+ */
+static void spray(struct trailer_injector *injector)
+{
+	injector->target->token = injector->token;
+	injector->target->value = injector->value;
 }
 
 static void maybe_inject_if_exists(struct trailer_injector *injector,
@@ -473,6 +517,7 @@ static struct trailer_injector *get_or_add_injector_by(const char *name)
 	CALLOC_ARRAY(injector, 1);
 	duplicate_trailer_conf(&injector->conf, &default_trailer_conf);
 	injector->conf.name = xstrdup(name);
+	injector->target = NULL;
 
 	list_add_tail(&injector->list, &injectors_from_conf);
 

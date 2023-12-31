@@ -373,9 +373,9 @@ void apply_trailer_templates(struct list_head *templates,
 
 		if (!applied)
 			maybe_add_if_missing(template, trailers);
-	}
 
-	free_trailer_templates(templates);
+		free_template(template);
+	}
 }
 
 int trailer_set_where(enum trailer_where *item, const char *value)

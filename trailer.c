@@ -172,47 +172,32 @@ static char last_non_space_char(const char *s)
 	return '\0';
 }
 
-static struct trailer_item *trailer_from(struct trailer_template *template)
+/*
+ * Check if the template's key and value has not been seen yet in either the
+ * current trailer or the rest of trailers, in one direction. That is, we only
+ * check all trailers before "current", or all trailers after "current". Using
+ * "current" is an optimization to skip over trailers that we already know to
+ * not have a duplicate.
+ */
+static int same_trailer_found(struct trailer_template *template,
+			      struct trailer_item *current,
+			      struct list_head *start)
 {
-	struct trailer_item *new_item = xcalloc(1, sizeof(*new_item));
-	new_item->token = template->token;
-	new_item->value = template->value;
-	template->token = template->value = NULL;
-	return new_item;
-}
+	int search_backwards = after_or_end(template->conf.where);
+	struct list_head *next;
 
-static void apply_template_to_trailers(struct trailer_template *template,
-				       struct trailer_item *on_tok)
-{
-	int aoe = after_or_end(template->conf.where);
-	struct trailer_item *to_add = trailer_from(template);
-	if (aoe)
-		list_add(&to_add->list, &on_tok->list);
-	else
-		list_add_tail(&to_add->list, &on_tok->list);
-}
-
-static int check_if_different(struct trailer_template *template,
-			      struct trailer_item *in_tok,
-			      struct list_head *head,
-			      int check_all)
-{
-	enum trailer_where where = template->conf.where;
-	struct list_head *next_head;
 	do {
-		if (same_trailer(in_tok, template))
-			return 0;
-		/*
-		 * if we want to add a trailer after another one,
-		 * we have to check those before this one
-		 */
-		next_head = after_or_end(where) ? in_tok->list.prev
-						: in_tok->list.next;
-		if (next_head == head)
-			break;
-		in_tok = list_entry(next_head, struct trailer_item, list);
-	} while (check_all);
-	return 1;
+		if (same_trailer(current, template))
+			return 1;
+
+		next = current->list.next;
+		if (search_backwards)
+			next = current->list.prev;
+
+		current = list_entry(next, struct trailer_item, list);
+	} while (next != start);
+
+	return 0;
 }
 
 static char *run_command_from_template(struct trailer_conf *conf,
@@ -316,32 +301,90 @@ static void apply(struct trailer_template *template)
 	template->target->value = xstrdup(template->value);
 }
 
+/*
+ * Given an existing trailer that was found with the same key, consider applying
+ * the template anyway over an existing (EXISTS_REPLACE) or new trailer
+ * (EXISTS_ADD_*).
+ */
 static void maybe_add_if_exists(struct trailer_template *template,
-				struct trailer_item *in_tok,
-				struct trailer_item *on_tok,
+				struct trailer_item *existing_trailer,
 				struct list_head *trailers)
 {
+	struct trailer_item *neighbor;
+	enum trailer_where where = template->conf.where;
+
 	switch (template->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
 		break;
 	case EXISTS_REPLACE:
 		populate_template_value(template);
-		template->target = in_tok;
+		template->target = existing_trailer;
 		apply(template);
 		break;
 	case EXISTS_ADD:
 		populate_template_value(template);
-		apply_template_to_trailers(template, on_tok);
+		create_new_target_for(template, existing_trailer, trailers);
+		apply(template);
 		break;
+	/*
+	 * Add a new trailer if there isn't one already with the same key and
+	 * value. In other words, avoid adding what would become a duplicate
+	 * trailer if we have the same trailer already somewhere in "trailers"
+	 *
+	 * The existing_trailer only has the same key as the template, so we
+	 * have to check each trailer in "trailers" (starting with
+	 * existing_trailer itself).
+	 */
 	case EXISTS_ADD_IF_DIFFERENT:
 		populate_template_value(template);
-		if (check_if_different(template, in_tok, trailers, 1))
-			apply_template_to_trailers(template, on_tok);
+		if (!same_trailer_found(template, existing_trailer, trailers)) {
+			create_new_target_for(template, existing_trailer,
+					      trailers);
+			apply(template);
+		}
 		break;
+	/*
+	 * This is like EXISTS_ADD_IF_DIFFERENT in that it wants to avoid
+	 * creating a duplicate trailer. But instead of searching through all
+	 * trailers, it only looks at one (existing) trailer that will be next
+	 * to us if we do end up adding a new trailer. In other words, if the
+	 * input does not have any duplicates, then creating duplicates is OK as
+	 * long as we wouldn't end up with 2 _consecutive_ duplicates.
+	 */
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
+		/*
+		 * If we want to add this trailer at the start or end, then
+		 * there is only one neighbor to check for being a duplicate
+		 * because there won't be a trailer before or after us,
+		 * respectively.
+		 *
+		 * If WHERE_BEFORE or WHERE_AFTER, we will be sandwiching
+		 * ourselves between existing_trailer and another one (assuming
+		 * existing_trailer itself is not at the start or end). But we
+		 * still only need to check one trailer (existing_neighbor).
+		 * That's because the other trailer (if any) was already checked
+		 * for the same key (see find_same_and_apply_arg()) just before
+		 * we were called. That is, we're only called when we found a
+		 * matching trailer with the same key (hence the name
+		 * "existing_trailer"), so the other trailer (if any) is
+		 * guaranteed to have at least a different key than us already
+		 * (making the checking of the value moot).
+		 */
+		if (where == WHERE_START)
+			neighbor = list_entry(trailers->next,
+						  struct trailer_item, list);
+		else if (where == WHERE_END)
+			neighbor = list_entry(trailers->prev,
+						  struct trailer_item, list);
+		else
+			neighbor = existing_trailer;
+
 		populate_template_value(template);
-		if (check_if_different(template, on_tok, trailers, 0))
-			apply_template_to_trailers(template, on_tok);
+		if (!same_trailer(neighbor, template)) {
+			create_new_target_for(template, existing_trailer,
+					      trailers);
+			apply(template);
+		}
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -352,20 +395,13 @@ static void maybe_add_if_exists(struct trailer_template *template,
 static void maybe_add_if_missing(struct trailer_template *template,
 				 struct list_head *trailers)
 {
-	enum trailer_where where;
-	struct trailer_item *to_add;
-
 	switch (template->conf.if_missing) {
 	case MISSING_DO_NOTHING:
 		break;
 	case MISSING_ADD:
-		where = template->conf.where;
 		populate_template_value(template);
-		to_add = trailer_from(template);
-		if (after_or_end(where))
-			list_add_tail(&to_add->list, trailers);
-		else
-			list_add(&to_add->list, trailers);
+		create_new_target_for(template, NULL, trailers);
+		apply(template);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -377,27 +413,19 @@ static int find_same_and_apply_arg(struct trailer_template *template,
 				   struct list_head *trailers)
 {
 	struct list_head *pos;
-	struct trailer_item *in_tok;
-	struct trailer_item *on_tok;
+	struct trailer_item *current;
 
 	enum trailer_where where = template->conf.where;
-	int middle = (where == WHERE_AFTER) || (where == WHERE_BEFORE);
 	int backwards = after_or_end(where);
-	struct trailer_item *start_tok;
 
 	if (list_empty(trailers))
 		return 0;
 
-	start_tok = list_entry(backwards ? trailers->prev : trailers->next,
-			       struct trailer_item,
-			       list);
-
 	list_for_each_dir(pos, trailers, backwards) {
-		in_tok = list_entry(pos, struct trailer_item, list);
-		if (!same_token(in_tok, template))
+		current = list_entry(pos, struct trailer_item, list);
+		if (!same_token(current, template))
 			continue;
-		on_tok = middle ? in_tok : start_tok;
-		maybe_add_if_exists(template, in_tok, on_tok, trailers);
+		maybe_add_if_exists(template, current, trailers);
 		return 1;
 	}
 	return 0;

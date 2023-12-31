@@ -323,8 +323,8 @@ static void maybe_add_if_exists(struct trailer_template *template,
 		break;
 	case EXISTS_REPLACE:
 		prepare_value_of(template);
-		apply(template, on_tok);
-		list_del(&in_tok->list);
+		template->target = in_tok;
+		apply_v2(template);
 		break;
 	case EXISTS_ADD:
 		prepare_value_of(template);

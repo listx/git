@@ -172,46 +172,27 @@ static char last_non_space_char(const char *s)
 	return '\0';
 }
 
-static struct trailer_item *trailer_from(struct trailer_template *template)
-{
-	struct trailer_item *new_item = xcalloc(1, sizeof(*new_item));
-	new_item->token = template->token;
-	new_item->value = template->value;
-	template->token = template->value = NULL;
-	return new_item;
-}
-
-static void apply(struct trailer_template *template,
-		  struct trailer_item *on_tok)
-{
-	int aoe = after_or_end(template->conf.where);
-	struct trailer_item *to_add = trailer_from(template);
-	if (aoe)
-		list_add(&to_add->list, &on_tok->list);
-	else
-		list_add_tail(&to_add->list, &on_tok->list);
-}
-
+/*
+ * Check if the template's full key and val combination has not been seen yet in
+ * either the existing trailer or the rest of trailers. If we want to add a
+ * trailer toward the end (after or end), we need to check all trailers coming
+ * before it. And so we search backwards up the list.
+ */
 static int check_if_different(struct trailer_template *template,
-			      struct trailer_item *in_tok,
-			      struct list_head *head,
+			      struct trailer_item *current,
+			      struct list_head *start,
 			      int check_all)
 {
-	enum trailer_where where = template->conf.where;
-	struct list_head *next_head;
+	int aoe = after_or_end(template->conf.where);
+	struct list_head *next;
+
 	do {
-		if (same_trailer(in_tok, template))
+		if (same_trailer(current, template))
 			return 0;
-		/*
-		 * if we want to add a trailer after another one,
-		 * we have to check those before this one
-		 */
-		next_head = after_or_end(where) ? in_tok->list.prev
-						: in_tok->list.next;
-		if (next_head == head)
-			break;
-		in_tok = list_entry(next_head, struct trailer_item, list);
-	} while (check_all);
+		next = aoe ? current->list.prev : current->list.next;
+		current = list_entry(next, struct trailer_item, list);
+	} while (next != start && check_all);
+
 	return 1;
 }
 
@@ -307,38 +288,63 @@ static void prepare_value_of(struct trailer_template *template)
 /*
  * Use the template by applying it at the target trailer.
  */
-static void apply_v2(struct trailer_template *template)
+static void apply(struct trailer_template *template)
 {
 	template->target->token = template->token;
 	template->target->value = template->value;
 }
 
+/*
+ * Given an existing trailer that was found with the same key, consider applying
+ * the template anyway over an existing (EXISTS_REPLACE) or new trailer
+ * (EXISTS_ADD_*).
+ */
 static void maybe_add_if_exists(struct trailer_template *template,
-				struct trailer_item *in_tok,
-				struct trailer_item *on_tok,
+				struct trailer_item *existing_trailer,
 				struct list_head *trailers)
 {
+	struct trailer_item *search_start = existing_trailer;
+	enum trailer_where where = template->conf.where;
+	int add_at_edge_of_block = (where == WHERE_START) || (where == WHERE_END);
+
 	switch (template->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
 		break;
 	case EXISTS_REPLACE:
 		prepare_value_of(template);
-		template->target = in_tok;
-		apply_v2(template);
+		template->target = existing_trailer;
+		apply(template);
 		break;
 	case EXISTS_ADD:
 		prepare_value_of(template);
-		apply(template, on_tok);
+		alloc_target_of(template, existing_trailer, trailers);
+		apply(template);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
 		prepare_value_of(template);
-		if (check_if_different(template, in_tok, trailers, 1))
-			apply(template, on_tok);
+		if (check_if_different(template, search_start, trailers, 1)) {
+			alloc_target_of(template, existing_trailer, trailers);
+			apply(template);
+		}
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
+		/*
+		 * For this case we have to redo the entire search, because if
+		 * WHERE_START or WHERE_END is set we don't care about any
+		 * similar trailers found in the middle (because the new trailer
+		 * will be placed at the start or end of the block.
+		 */
+		if (add_at_edge_of_block) {
+			search_start = list_entry(
+				(where == WHERE_START) ? trailers->next : trailers->prev,
+				struct trailer_item, list);
+		}
+
 		prepare_value_of(template);
-		if (check_if_different(template, on_tok, trailers, 0))
-			apply(template, on_tok);
+		if (check_if_different(template, search_start, trailers, 0)) {
+			alloc_target_of(template, existing_trailer, trailers);
+			apply(template);
+		}
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -349,20 +355,13 @@ static void maybe_add_if_exists(struct trailer_template *template,
 static void maybe_add_if_missing(struct trailer_template *template,
 				 struct list_head *trailers)
 {
-	enum trailer_where where;
-	struct trailer_item *to_add;
-
 	switch (template->conf.if_missing) {
 	case MISSING_DO_NOTHING:
 		break;
 	case MISSING_ADD:
-		where = template->conf.where;
 		prepare_value_of(template);
-		to_add = trailer_from(template);
-		if (after_or_end(where))
-			list_add_tail(&to_add->list, trailers);
-		else
-			list_add(&to_add->list, trailers);
+		alloc_target_of(template, NULL, trailers);
+		apply(template);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -374,27 +373,19 @@ static int find_same_and_apply_arg(struct trailer_template *template,
 				   struct list_head *trailers)
 {
 	struct list_head *pos;
-	struct trailer_item *in_tok;
-	struct trailer_item *on_tok;
+	struct trailer_item *current;
 
 	enum trailer_where where = template->conf.where;
-	int middle = (where == WHERE_AFTER) || (where == WHERE_BEFORE);
 	int backwards = after_or_end(where);
-	struct trailer_item *start_tok;
 
 	if (list_empty(trailers))
 		return 0;
 
-	start_tok = list_entry(backwards ? trailers->prev : trailers->next,
-			       struct trailer_item,
-			       list);
-
 	list_for_each_dir(pos, trailers, backwards) {
-		in_tok = list_entry(pos, struct trailer_item, list);
-		if (!same_token(in_tok, template))
+		current = list_entry(pos, struct trailer_item, list);
+		if (!same_token(current, template))
 			continue;
-		on_tok = middle ? in_tok : start_tok;
-		maybe_add_if_exists(template, in_tok, on_tok, trailers);
+		maybe_add_if_exists(template, current, trailers);
 		return 1;
 	}
 	return 0;

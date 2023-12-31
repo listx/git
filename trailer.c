@@ -325,8 +325,8 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 		break;
 	case EXISTS_REPLACE:
 		prepare_value_of(injector);
-		apply(injector, on_tok);
-		list_del(&in_tok->list);
+		injector->target = in_tok;
+		spray(injector);
 		break;
 	case EXISTS_ADD:
 		prepare_value_of(injector);

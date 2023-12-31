@@ -177,7 +177,6 @@ static struct trailer_item *trailer_from(struct trailer_template *template)
 	new_item->token = template->token;
 	new_item->value = template->value;
 	template->token = template->value = NULL;
-	free_template(template);
 	return new_item;
 }
 
@@ -279,7 +278,6 @@ static void maybe_add_if_exists(struct trailer_template *template,
 {
 	switch (template->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
-		free_template(template);
 		break;
 	case EXISTS_REPLACE:
 		populate_template_value(template);
@@ -295,15 +293,11 @@ static void maybe_add_if_exists(struct trailer_template *template,
 		populate_template_value(template);
 		if (check_if_different(template, in_tok, trailers, 1))
 			apply_template_to_trailers(template, on_tok);
-		else
-			free_template(template);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
 		populate_template_value(template);
 		if (check_if_different(template, on_tok, trailers, 0))
 			apply_template_to_trailers(template, on_tok);
-		else
-			free_template(template);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -319,7 +313,6 @@ static void maybe_add_if_missing(struct trailer_template *template,
 
 	switch (template->conf.if_missing) {
 	case MISSING_DO_NOTHING:
-		free_template(template);
 		break;
 	case MISSING_ADD:
 		where = template->conf.where;
@@ -382,6 +375,8 @@ void apply_trailer_templates(struct list_head *templates,
 
 		if (!applied)
 			maybe_add_if_missing(template, trailers);
+
+		free_template(template);
 	}
 }
 

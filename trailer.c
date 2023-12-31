@@ -60,6 +60,7 @@ struct trailer_template {
 	char *token;
 	char *value;
 	struct trailer_conf conf;
+	struct trailer_item *target;
 };
 
 static LIST_HEAD(templates_from_conf);
@@ -251,6 +252,39 @@ static char *run_command_from_template(struct trailer_conf *conf,
 }
 
 /*
+ * Prepare the template so that it is pointing to a new, blank trailer target
+ * (correctly positioned somewhere inside "trailers") which we would like to
+ * apply on top of (overwrite).
+ */
+static void create_new_target_for(struct trailer_template *template,
+				  struct trailer_item *middle,
+				  struct list_head *trailers)
+{
+	struct trailer_item *target = xcalloc(1, sizeof(*target));
+
+	switch (template->conf.where) {
+	case WHERE_START:
+		list_add(&target->list, trailers);
+		break;
+	case WHERE_BEFORE:
+		list_add(&target->list,
+			 middle ? middle->list.prev : trailers);
+		break;
+	case WHERE_AFTER:
+		list_add_tail(&target->list,
+			      middle ? middle->list.next : trailers);
+		break;
+	case WHERE_END:
+		list_add_tail(&target->list, trailers);
+		break;
+	default:
+		BUG("trailer.c: unhandled type %d", template->conf.where);
+	}
+
+	template->target = target;
+}
+
+/*
  * Prepare the template by running the command (if any) requested by the
  * template in order to populate the template's value field.
  */
@@ -269,6 +303,17 @@ static void populate_template_value(struct trailer_template *template)
 		template->value = run_command_from_template(&template->conf, arg);
 		free((char *)arg);
 	}
+}
+
+/*
+ * Use the template by applying it at the target trailer.
+ */
+static void apply(struct trailer_template *template)
+{
+	free(template->target->token);
+	free(template->target->value);
+	template->target->token = xstrdup(template->token);
+	template->target->value = xstrdup(template->value);
 }
 
 static void maybe_add_if_exists(struct trailer_template *template,
@@ -474,6 +519,7 @@ static struct trailer_template *get_or_add_template_by(const char *name)
 	CALLOC_ARRAY(template, 1);
 	duplicate_trailer_conf(&template->conf, &default_trailer_conf);
 	template->conf.name = xstrdup(name);
+	template->target = NULL;
 
 	list_add_tail(&template->list, &templates_from_conf);
 

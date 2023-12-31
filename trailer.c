@@ -172,46 +172,27 @@ static char last_non_space_char(const char *s)
 	return '\0';
 }
 
-static struct trailer_item *trailer_from(struct trailer_injector *injector)
-{
-	struct trailer_item *new_item = xcalloc(1, sizeof(*new_item));
-	new_item->token = injector->token;
-	new_item->value = injector->value;
-	injector->token = injector->value = NULL;
-	return new_item;
-}
-
-static void apply(struct trailer_injector *injector,
-		  struct trailer_item *on_tok)
-{
-	int aoe = after_or_end(injector->conf.where);
-	struct trailer_item *to_add = trailer_from(injector);
-	if (aoe)
-		list_add(&to_add->list, &on_tok->list);
-	else
-		list_add_tail(&to_add->list, &on_tok->list);
-}
-
+/*
+ * Check if the injector's full key and val combination has not been seen yet in
+ * either the existing trailer or the rest of trailers. If we want to add a
+ * trailer toward the end (after or end), we need to check all trailers coming
+ * before it. And so we search backwards up the list.
+ */
 static int check_if_different(struct trailer_injector *injector,
-			      struct trailer_item *in_tok,
-			      struct list_head *head,
+			      struct trailer_item *current,
+			      struct list_head *start,
 			      int check_all)
 {
-	enum trailer_where where = injector->conf.where;
-	struct list_head *next_head;
+	int aoe = after_or_end(injector->conf.where);
+	struct list_head *next;
+
 	do {
-		if (same_trailer(in_tok, injector))
+		if (same_trailer(current, injector))
 			return 0;
-		/*
-		 * if we want to add a trailer after another one,
-		 * we have to check those before this one
-		 */
-		next_head = after_or_end(where) ? in_tok->list.prev
-						: in_tok->list.next;
-		if (next_head == head)
-			break;
-		in_tok = list_entry(next_head, struct trailer_item, list);
-	} while (check_all);
+		next = aoe ? current->list.prev : current->list.next;
+		current = list_entry(next, struct trailer_item, list);
+	} while (next != start && check_all);
+
 	return 1;
 }
 
@@ -315,32 +296,57 @@ static void spray(struct trailer_injector *injector)
 	injector->target->value = injector->value;
 }
 
+/*
+ * Given an existing trailer that was found with the same key, consider spraying
+ * the injector anyway over an existing (EXISTS_REPLACE) or new trailer
+ * (EXISTS_ADD_*).
+ */
 static void maybe_inject_if_exists(struct trailer_injector *injector,
-				   struct trailer_item *in_tok,
-				   struct trailer_item *on_tok,
+				   struct trailer_item *existing_trailer,
 				   struct list_head *trailers)
 {
+	struct trailer_item *search_start = existing_trailer;
+	enum trailer_where where = injector->conf.where;
+	int inject_at_edge_of_block = (where == WHERE_START) || (where == WHERE_END);
+
 	switch (injector->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
 		break;
 	case EXISTS_REPLACE:
 		prepare_value_of(injector);
-		injector->target = in_tok;
+		injector->target = existing_trailer;
 		spray(injector);
 		break;
 	case EXISTS_ADD:
 		prepare_value_of(injector);
-		apply(injector, on_tok);
+		alloc_target_of(injector, existing_trailer, trailers);
+		spray(injector);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT:
 		prepare_value_of(injector);
-		if (check_if_different(injector, in_tok, trailers, 1))
-			apply(injector, on_tok);
+		if (check_if_different(injector, search_start, trailers, 1)) {
+			alloc_target_of(injector, existing_trailer, trailers);
+			spray(injector);
+		}
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
+		/*
+		 * For this case we have to redo the entire search, because if
+		 * WHERE_START or WHERE_END is set we don't care about any
+		 * similar trailers found in the middle (because the new trailer
+		 * will be placed at the start or end of the block.
+		 */
+		if (inject_at_edge_of_block) {
+			search_start = list_entry(
+				(where == WHERE_START) ? trailers->next : trailers->prev,
+				struct trailer_item, list);
+		}
+
 		prepare_value_of(injector);
-		if (check_if_different(injector, on_tok, trailers, 0))
-			apply(injector, on_tok);
+		if (check_if_different(injector, search_start, trailers, 0)) {
+			alloc_target_of(injector, existing_trailer, trailers);
+			spray(injector);
+		}
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -351,20 +357,13 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 static void maybe_inject_if_missing(struct trailer_injector *injector,
 				    struct list_head *trailers)
 {
-	enum trailer_where where;
-	struct trailer_item *to_add;
-
 	switch (injector->conf.if_missing) {
 	case MISSING_DO_NOTHING:
 		break;
 	case MISSING_ADD:
-		where = injector->conf.where;
 		prepare_value_of(injector);
-		to_add = trailer_from(injector);
-		if (after_or_end(where))
-			list_add_tail(&to_add->list, trailers);
-		else
-			list_add(&to_add->list, trailers);
+		alloc_target_of(injector, NULL, trailers);
+		spray(injector);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -376,27 +375,19 @@ static int find_same_and_apply_arg(struct trailer_injector *injector,
 				   struct list_head *trailers)
 {
 	struct list_head *pos;
-	struct trailer_item *in_tok;
-	struct trailer_item *on_tok;
+	struct trailer_item *current;
 
 	enum trailer_where where = injector->conf.where;
-	int middle = (where == WHERE_AFTER) || (where == WHERE_BEFORE);
 	int backwards = after_or_end(where);
-	struct trailer_item *start_tok;
 
 	if (list_empty(trailers))
 		return 0;
 
-	start_tok = list_entry(backwards ? trailers->prev : trailers->next,
-			       struct trailer_item,
-			       list);
-
 	list_for_each_dir(pos, trailers, backwards) {
-		in_tok = list_entry(pos, struct trailer_item, list);
-		if (!same_token(in_tok, injector))
+		current = list_entry(pos, struct trailer_item, list);
+		if (!same_token(current, injector))
 			continue;
-		on_tok = middle ? in_tok : start_tok;
-		maybe_inject_if_exists(injector, in_tok, on_tok, trailers);
+		maybe_inject_if_exists(injector, current, trailers);
 		return 1;
 	}
 	return 0;

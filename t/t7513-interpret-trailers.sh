@@ -410,6 +410,8 @@ test_expect_success 'replacement with multiple matches (first one replaced)' '
 	test_cmp expected actual
 '
 
+# Keep the "name: " trailer in the middle (don't change its position, because we
+# are replacing it in place).
 test_expect_success 'multiline field treated as atomic for replacement' '
 	q_to_tab >patch <<-\EOF &&
 
@@ -421,8 +423,8 @@ test_expect_success 'multiline field treated as atomic for replacement' '
 	q_to_tab >expected <<-\EOF &&
 
 		another: trailer
-		another: trailer
 		name: value
+		another: trailer
 	EOF
 	test_config trailer.name.ifexists replace &&
 	git interpret-trailers --trailer "name: value" patch >actual &&
@@ -1252,10 +1254,10 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
+		Fixes: 22
 		Acked-by= Z
 		Reviewed-by:
 		Signed-off-by: Z
-		Fixes: 22
 	EOF
 	git interpret-trailers --if-exists replace --trailer "review:" \
 		--trailer "fix=53" --trailer "fix=22" --trailer "bug: 42" \
@@ -1286,10 +1288,10 @@ test_expect_success 'using "--if-exists replace" with "--no-if-exists" defaults 
 test_expect_success 'using "--no-if-exists" defaults to hardcoded default if nothing configured' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
+		Fixes: 53
 		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
-		Fixes: 53
 		Signed-off-by: addme
 	EOF
 	git interpret-trailers --if-exists replace --trailer "Fixes: 53" --no-if-exists \
@@ -1297,12 +1299,47 @@ test_expect_success 'using "--no-if-exists" defaults to hardcoded default if not
 	test_cmp expected actual
 '
 
-# The second "Fixes: 53" trailer is discarded, because the "--no-if-exists" here
-# makes us default to addIfDifferentNeighbor, and we already added the "Fixes:
-# 53" trailer earlier in the argument list.
+# The second "Fixes: 53" trailer is not added, because:
+#
+# (1) The initial "Fixes: Z" in the input is replaced with "Fixes: 53" because
+#     we set "--if-exists replace".
+#
+# (2) Then when we read "--if-exists addIfDifferent" we will from now on reject
+#     any newly supplied trailer if we already have the exact same trailer in
+#     the (processed) input.
+#
+# (3) When we read '--trailer "Fixes: 53"' we reject it because we already have
+#     one in the trailer block.
 test_expect_success 'using "--no-if-exists" defaults to hardcoded default if nothing configured (no addition)' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
+		Fixes: 53
+		Acked-by: Z
+		Reviewed-by: Z
+		Signed-off-by: Z
+	EOF
+	git interpret-trailers --if-exists replace --trailer "Fixes: 53" --if-exists addIfDifferent \
+		--trailer "Fixes: 53" <complex_message >actual &&
+	test_cmp expected actual
+'
+
+# The second "Fixes: 53" trailer is added, because:
+#
+# (1) The initial "Fixes: Z" in the input is replaced with "Fixes: 53" because
+#     we set "--if-exists replace".
+#
+# (2) Then when we read "--no-if-exists", we no longer want to replace "Fixes:
+#     ..." trailers any more.
+#
+# (3) Then when we provide a second '--trailer "Fixes: 53"' argument, we default
+#     back to hardcoded defaults of addIfDifferentNeighbor. The other hardcoded
+#     default for trailer placement is the end of the trailer block. Because the
+#     last trailer "Signed-off-by: Z" is a different neighbor than the (second)
+#     "Fixes: 53" we want to add, we add it in.
+test_expect_success 'using "--no-if-exists" defaults to hardcoded default if nothing configured (addition)' '
+	cat complex_message_body >expected &&
+	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
+		Fixes: 53
 		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -1326,12 +1363,12 @@ test_expect_success 'using "ifExists = replace"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
+		Fixes: 22
 		Acked-by= Z
 		Acked-by= Junio
 		Acked-by= Peff
 		Reviewed-by:
 		Signed-off-by: Z
-		Fixes: 22
 	EOF
 	git interpret-trailers --trailer "review:" \
 		--trailer "fix=53" --trailer "ack: Junio" --trailer "fix=22" \

@@ -187,9 +187,9 @@ test_expect_success 'commit --trailer with -c and "replace" as ifexists' '
 
 	Signed-off-by: C O Mitter <committer@example.com>
 	Signed-off-by: C1 E1
+	Helped-by: C3 E3
 	Reported-by: C3 E3
 	Mentored-by: C4 E4
-	Helped-by: C3 E3
 	EOF
 	git -c trailer.ifexists="replace" \
 		commit --trailer "Mentored-by: C4 E4" \
@@ -453,8 +453,8 @@ test_expect_success 'commit --trailer with -c and command' '
 	Signed-off-by: C O Mitter <committer@example.com>
 	Signed-off-by: C1 E1
 	Helped-by: C2 E2
-	Mentored-by: C4 E4
 	Reported-by: A U Thor <author@example.com>
+	Mentored-by: C4 E4
 	EOF
 	git -c trailer.report.key="Reported-by: " \
 		-c trailer.report.ifexists="replace" \

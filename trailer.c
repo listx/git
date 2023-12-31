@@ -177,7 +177,6 @@ static struct trailer_item *trailer_from(struct trailer_injector *injector)
 	new_item->token = injector->token;
 	new_item->value = injector->value;
 	injector->token = injector->value = NULL;
-	free_injector(injector);
 	return new_item;
 }
 
@@ -279,13 +278,11 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 {
 	switch (injector->conf.if_exists) {
 	case EXISTS_DO_NOTHING:
-		free_injector(injector);
 		break;
 	case EXISTS_REPLACE:
 		prepare(injector);
 		apply(injector, on_tok);
 		list_del(&in_tok->list);
-		free_trailer_item(in_tok);
 		break;
 	case EXISTS_ADD:
 		prepare(injector);
@@ -295,15 +292,11 @@ static void maybe_inject_if_exists(struct trailer_injector *injector,
 		prepare(injector);
 		if (check_if_different(injector, in_tok, trailers, 1))
 			apply(injector, on_tok);
-		else
-			free_injector(injector);
 		break;
 	case EXISTS_ADD_IF_DIFFERENT_NEIGHBOR:
 		prepare(injector);
 		if (check_if_different(injector, on_tok, trailers, 0))
 			apply(injector, on_tok);
-		else
-			free_injector(injector);
 		break;
 	default:
 		BUG("trailer.c: unhandled value %d",
@@ -319,7 +312,6 @@ static void maybe_inject_if_missing(struct trailer_injector *injector,
 
 	switch (injector->conf.if_missing) {
 	case MISSING_DO_NOTHING:
-		free_injector(injector);
 		break;
 	case MISSING_ADD:
 		where = injector->conf.where;
@@ -383,6 +375,8 @@ void apply_trailer_injectors(struct list_head *injectors,
 		if (!applied)
 			maybe_inject_if_missing(injector, trailers);
 	}
+
+	free_trailer_injectors(injectors);
 }
 
 int trailer_set_where(enum trailer_where *item, const char *value)

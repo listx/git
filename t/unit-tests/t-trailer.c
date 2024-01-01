@@ -10,19 +10,18 @@ struct contents {
 static void t_trailer_iterator(const char *msg, size_t num_expected,
 			       struct contents *contents)
 {
-	struct trailer_iterator iter;
+	struct trailer_iter *iter = trailer_iter_init(msg);
 	size_t i = 0;
 
-	trailer_iterator_init(&iter, msg);
-	while (trailer_iterator_advance(&iter)) {
+	while (trailer_iter_advance(iter)) {
 		if (num_expected) {
-			check_str(iter.raw, contents[i].raw);
-			check_str(iter.key.buf, contents[i].key);
-			check_str(iter.val.buf, contents[i].val);
+			check_str(trailer_iter_raw(iter), contents[i].raw);
+			check_str(trailer_iter_key(iter), contents[i].key);
+			check_str(trailer_iter_val(iter), contents[i].val);
 		}
 		i++;
 	}
-	trailer_iterator_release(&iter);
+	trailer_iter_release(iter);
 
 	check_uint(i, ==, num_expected);
 }

@@ -45,6 +45,45 @@ struct trailer_conf {
 	enum trailer_if_missing if_missing;
 };
 
+/*
+ * An interface for iterating over the trailers found in a particular commit
+ * message. Use like:
+ *
+ *   struct trailer_iter *iter = trailer_iter_init(msg);
+ *   while (trailer_iter_advance(iter))
+ *      ... do something with iter ...
+ *   trailer_iter_release(iter);
+ */
+struct trailer_iter {
+	struct trailer_block *trailer_block;
+	size_t cur;
+
+	/*
+	 * Raw line (e.g., "foo: bar baz") before being parsed as a trailer
+	 * key/val pair as part of a trailer block. A trailer block can be
+	 * either 100% trailer lines, or mixed in with non-trailer lines (in
+	 * which case at least 25% must be trailer lines).
+	 */
+	const char *raw;
+	struct strbuf key;
+	struct strbuf val;
+};
+
+const char *trailer_iter_raw(struct trailer_iter *iter)
+{
+	return iter->raw;
+}
+
+const char *trailer_iter_key(struct trailer_iter *iter)
+{
+	return iter->key.buf;
+}
+
+const char *trailer_iter_val(struct trailer_iter *iter)
+{
+	return iter->val.buf;
+}
+
 static struct trailer_conf default_trailer_conf;
 
 struct trailer {
@@ -1277,20 +1316,23 @@ void format_trailers_from_commit(const struct trailer_processing_options *opts,
 	trailer_block_release(trailer_block);
 }
 
-void trailer_iterator_init(struct trailer_iterator *iter, const char *msg)
+struct trailer_iter *trailer_iter_init(const char *msg)
 {
+	struct trailer_iter *iter = xcalloc(1, sizeof(*iter));
 	struct trailer_processing_options opts = TRAILER_PROCESSING_OPTIONS_INIT;
 	strbuf_init(&iter->key, 0);
 	strbuf_init(&iter->val, 0);
 	opts.no_divider = 1;
-	iter->internal.trailer_block = trailer_block_get(&opts, msg);
-	iter->internal.cur = 0;
+	iter->trailer_block = trailer_block_get(&opts, msg);
+	iter->cur = 0;
+
+	return iter;
 }
 
-int trailer_iterator_advance(struct trailer_iterator *iter)
+int trailer_iter_advance(struct trailer_iter *iter)
 {
-	if (iter->internal.cur < iter->internal.trailer_block->trailer_nr) {
-		char *trailer_string = iter->internal.trailer_block->trailer_strings[iter->internal.cur++];
+	if (iter->cur < iter->trailer_block->trailer_nr) {
+		char *trailer_string = iter->trailer_block->trailer_strings[iter->cur++];
 		int separator_pos = find_separator(trailer_string, separators);
 
 		iter->raw = trailer_string;
@@ -1304,11 +1346,12 @@ int trailer_iterator_advance(struct trailer_iterator *iter)
 	return 0;
 }
 
-void trailer_iterator_release(struct trailer_iterator *iter)
+void trailer_iter_release(struct trailer_iter *iter)
 {
-	trailer_block_release(iter->internal.trailer_block);
+	trailer_block_release(iter->trailer_block);
 	strbuf_release(&iter->val);
 	strbuf_release(&iter->key);
+	free(iter);
 }
 
 int amend_file_with_trailers(const char *path, const struct strvec *trailer_args)

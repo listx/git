@@ -322,7 +322,7 @@ static const char *get_todo_path(const struct replay_opts *opts)
 static int has_conforming_footer(struct strbuf *sb, struct strbuf *sob,
 	size_t ignore_footer)
 {
-	struct trailer_iterator iter;
+	struct trailer_iter *iter;
 	size_t i = 0, found_sob = 0;
 	char saved_char = sb->buf[sb->len - ignore_footer];
 
@@ -330,16 +330,16 @@ static int has_conforming_footer(struct strbuf *sb, struct strbuf *sob,
 		sb->buf[sb->len - ignore_footer] = '\0';
 	}
 
-	trailer_iterator_init(&iter, sb->buf);
-	while (trailer_iterator_advance(&iter)) {
+	iter = trailer_iter_init(sb->buf);
+	while (trailer_iter_advance(iter)) {
 		i++;
 		if (sob &&
-		    iter.is_trailer &&
-		    !strncmp(iter.raw.buf, sob->buf, sob->len)) {
+		    trailer_iter_is_trailer(iter) &&
+		    !strncmp(trailer_iter_raw(iter), sob->buf, sob->len)) {
 			found_sob = i;
 		}
 	}
-	trailer_iterator_release(&iter);
+	trailer_iter_release(iter);
 
 	if (ignore_footer)
 		sb->buf[sb->len - ignore_footer] = saved_char;

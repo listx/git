@@ -51,6 +51,18 @@ test_expect_success 'setup' '
 	EOF
 '
 
+test_expect_success 'using unrecognized argument to --where' '
+	test_must_fail git interpret-trailers <basic_message --where foo
+'
+
+test_expect_success 'using unrecognized argument to --if-exists' '
+	test_must_fail git interpret-trailers <basic_message --if-exists foo
+'
+
+test_expect_success 'using unrecognized argument to --if-missing' '
+	test_must_fail git interpret-trailers <basic_message --if-missing foo
+'
+
 test_expect_success 'with cmd' '
 	test_when_finished "git config --remove-section trailer.bug" &&
 	git config trailer.bug.key "Bug-maker: " &&

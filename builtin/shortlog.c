@@ -171,8 +171,8 @@ static void insert_records_from_trailers(struct shortlog *log,
 					 struct pretty_print_context *ctx,
 					 const char *oneline)
 {
-	struct trailer_iterator iter;
-	const char *commit_buffer, *body, *value;
+	struct trailer_iter *iter;
+	const char *commit_buffer, *body, *value, *key;
 	struct strbuf ident = STRBUF_INIT;
 
 	if (!log->trailers.nr)
@@ -188,14 +188,15 @@ static void insert_records_from_trailers(struct shortlog *log,
 	if (!body)
 		return;
 
-	trailer_iterator_init(&iter, body);
-	while (trailer_iterator_advance(&iter)) {
-		if (!iter.is_trailer)
+	iter = trailer_iter_init(body);
+	while (trailer_iter_advance(iter)) {
+		if (!trailer_iter_is_trailer(iter))
 			continue;
 
-		value = iter.val.buf;
+		value = trailer_iter_val(iter);
+		key = trailer_iter_key(iter);
 
-		if (!string_list_has_string(&log->trailers, iter.key.buf))
+		if (!string_list_has_string(&log->trailers, key))
 			continue;
 
 		strbuf_reset(&ident);
@@ -206,7 +207,7 @@ static void insert_records_from_trailers(struct shortlog *log,
 			continue;
 		insert_one_record(log, value, oneline);
 	}
-	trailer_iterator_release(&iter);
+	trailer_iter_release(iter);
 
 	strbuf_release(&ident);
 	repo_unuse_commit_buffer(the_repository, commit, commit_buffer);

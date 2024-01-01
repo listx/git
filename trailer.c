@@ -467,7 +467,7 @@ void apply_trailer_injectors(struct list_head *injectors,
 int trailer_set_where(enum trailer_where *item, const char *value)
 {
 	if (!value)
-		*item = WHERE_DEFAULT;
+		*item = WHERE_UNSPECIFIED;
 	else if (!strcasecmp("after", value))
 		*item = WHERE_AFTER;
 	else if (!strcasecmp("before", value))
@@ -484,7 +484,7 @@ int trailer_set_where(enum trailer_where *item, const char *value)
 int trailer_set_if_exists(enum trailer_if_exists *item, const char *value)
 {
 	if (!value)
-		*item = EXISTS_DEFAULT;
+		*item = EXISTS_UNSPECIFIED;
 	else if (!strcasecmp("addIfDifferent", value))
 		*item = EXISTS_ADD_IF_DIFFERENT;
 	else if (!strcasecmp("addIfDifferentNeighbor", value))
@@ -503,7 +503,7 @@ int trailer_set_if_exists(enum trailer_if_exists *item, const char *value)
 int trailer_set_if_missing(enum trailer_if_missing *item, const char *value)
 {
 	if (!value)
-		*item = MISSING_DEFAULT;
+		*item = MISSING_UNSPECIFIED;
 	else if (!strcasecmp("doNothing", value))
 		*item = MISSING_DO_NOTHING;
 	else if (!strcasecmp("add", value))

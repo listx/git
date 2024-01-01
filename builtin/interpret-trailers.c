@@ -90,13 +90,13 @@ static int option_parse_trailer_injector(const struct option *opt,
 		/*
 		 * Override conf_current with settings specified via CLI flags.
 		 */
-		if (where != WHERE_DEFAULT) {
+		if (where != WHERE_UNSPECIFIED) {
 			trailer_conf_set_where(where, conf_current);
 		}
-		if (if_exists != EXISTS_DEFAULT) {
+		if (if_exists != EXISTS_UNSPECIFIED) {
 			trailer_conf_set_if_exists(if_exists, conf_current);
 		}
-		if (if_missing != MISSING_DEFAULT) {
+		if (if_missing != MISSING_UNSPECIFIED) {
 			trailer_conf_set_if_missing(if_missing, conf_current);
 		}
 

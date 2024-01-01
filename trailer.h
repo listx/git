@@ -6,6 +6,7 @@
 
 struct trailer_block;
 struct trailer_conf;
+struct trailer_iter;
 
 enum trailer_where {
 	WHERE_DEFAULT,
@@ -98,40 +99,6 @@ void format_trailers_from_commit(const struct trailer_processing_options *opts,
 				 struct strbuf *out);
 
 /*
- * An interface for iterating over the trailers found in a particular commit
- * message. Use like:
- *
- *   struct trailer_iterator iter;
- *   trailer_iterator_init(&iter, msg);
- *   while (trailer_iterator_advance(&iter))
- *      ... do something with iter.key and iter.val ...
- *   trailer_iterator_release(&iter);
- */
-struct trailer_iterator {
-	struct strbuf key;
-	struct strbuf val;
-
-	/*
-	 * Raw line (e.g., "foo: bar baz") before being parsed as a trailer
-	 * key/val pair. This field can contain non-trailer lines because it's
-	 * valid for a trailer block to contain such lines (i.e., we only
-	 * require 25% of the lines in a trailer block to be trailer lines).
-	 */
-	const char *raw;
-
-	/*
-	 * 1 if the raw line was parsed as a separate key/val pair.
-	 */
-	int is_trailer;
-
-	/* private */
-	struct {
-		struct trailer_block *trailer_block;
-		size_t cur;
-	} internal;
-};
-
-/*
  * Initialize "iter" in preparation for walking over the trailers in the commit
  * message "msg". The "msg" pointer must remain valid until the iterator is
  * released.
@@ -139,7 +106,7 @@ struct trailer_iterator {
  * After initializing, note that key/val will not yet point to any trailer.
  * Call advance() to parse the first one (if any).
  */
-void trailer_iterator_init(struct trailer_iterator *iter, const char *msg);
+struct trailer_iter *trailer_iter_init(const char *msg);
 
 /*
  * Advance to the next trailer of the iterator. Returns 0 if there is no such
@@ -147,11 +114,16 @@ void trailer_iterator_init(struct trailer_iterator *iter, const char *msg);
  * fetched from the iter->key and iter->value fields (which are valid
  * only until the next advance).
  */
-int trailer_iterator_advance(struct trailer_iterator *iter);
+int trailer_iter_advance(struct trailer_iter *iter);
 
 /*
  * Release all resources associated with the trailer iteration.
  */
-void trailer_iterator_release(struct trailer_iterator *iter);
+void trailer_iter_release(struct trailer_iter *iter);
+
+int trailer_iter_is_trailer(struct trailer_iter *iter);
+const char *trailer_iter_raw(struct trailer_iter *iter);
+const char *trailer_iter_key(struct trailer_iter *iter);
+const char *trailer_iter_val(struct trailer_iter *iter);
 
 #endif /* TRAILER_H */

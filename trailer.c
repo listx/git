@@ -103,6 +103,7 @@ const char *trailer_iter_val(struct trailer_iter *iter)
 
 struct trailer {
 	struct list_head list;
+	char *raw;
 	/*
 	 * If this is not a trailer line, the line is stored in value
 	 * (excluding the terminating newline) and key is NULL.
@@ -197,6 +198,7 @@ static inline void strbuf_replace(struct strbuf *sb, const char *a, const char *
 
 static void free_trailer(struct trailer *trailer)
 {
+	free(trailer->raw);
 	free(trailer->key);
 	free(trailer->value);
 	free(trailer);
@@ -821,13 +823,12 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 	}
 }
 
-static struct trailer *add_trailer(struct list_head *trailers, char *key,
-					     char *val)
+static struct trailer *trailer_from(char *raw, char *key, char *val)
 {
 	struct trailer *trailer = xcalloc(1, sizeof(*trailer));
+	trailer->raw = raw;
 	trailer->key = key;
 	trailer->value = val;
-	list_add_tail(&trailer->list, trailers);
 	return trailer;
 }
 
@@ -1156,6 +1157,8 @@ struct trailer_block *parse_trailers(const char *str,
 				     struct list_head *trailers)
 {
 	struct trailer_block *trailer_block;
+	struct trailer *trailer;
+	struct strbuf raw = STRBUF_INIT;
 	struct strbuf key = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 	size_t i;
@@ -1167,20 +1170,23 @@ struct trailer_block *parse_trailers(const char *str,
 		char *trailer_string = trailer_block->trailer_strings[i];
 		if (trailer_string[0] == comment_line_char)
 			continue;
+		strbuf_addstr(&raw, trailer_string);
 		separator_pos = find_separator(trailer_string, tsc->separators);
 		if (separator_pos >= 1) {
 			parse_trailer(trailer_string, separator_pos, tsc, &key, &val, NULL);
 			if (opts->unfold)
 				unfold_value(&val);
-			add_trailer(trailers,
-					 strbuf_detach(&key, NULL),
-					 strbuf_detach(&val, NULL));
+			trailer = trailer_from(strbuf_detach(&raw, NULL),
+					       strbuf_detach(&key, NULL),
+					       strbuf_detach(&val, NULL));
+			list_add_tail(&trailer->list, trailers);
 		} else if (!opts->only_trailers) {
 			strbuf_addstr(&val, trailer_string);
 			strbuf_strip_suffix(&val, "\n");
-			add_trailer(trailers,
-					 NULL,
-					 strbuf_detach(&val, NULL));
+			trailer = trailer_from(strbuf_detach(&raw, NULL),
+					       NULL,
+					       strbuf_detach(&val, NULL));
+			list_add_tail(&trailer->list, trailers);
 		}
 	}
 

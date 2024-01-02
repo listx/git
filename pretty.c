@@ -1273,7 +1273,7 @@ static struct strbuf *expand_string_arg(struct strbuf *sb,
 	return sb;
 }
 
-int format_set_trailers_options(struct process_trailer_options *opts,
+int format_set_trailers_options(struct trailer_processing_options *opts,
 				struct string_list *filter_list,
 				struct strbuf *sepbuf,
 				struct strbuf *kvsepbuf,
@@ -1745,7 +1745,7 @@ static size_t format_commit_one(struct strbuf *sb, /* in UTF-8 */
 	}
 
 	if (skip_prefix(placeholder, "(trailers", &arg)) {
-		struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
+		struct trailer_processing_options opts = TRAILER_PROCESSING_OPTIONS_INIT;
 		struct string_list filter_list = STRING_LIST_INIT_NODUP;
 		struct strbuf sepbuf = STRBUF_INIT;
 		struct strbuf kvsepbuf = STRBUF_INIT;

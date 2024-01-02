@@ -5,7 +5,7 @@
 #include "strbuf.h"
 
 struct trailer_block;
-struct conf_info;
+struct trailer_conf;
 
 enum trailer_where {
 	WHERE_DEFAULT,
@@ -32,18 +32,18 @@ int trailer_set_where(enum trailer_where *item, const char *value);
 int trailer_set_if_exists(enum trailer_if_exists *item, const char *value);
 int trailer_set_if_missing(enum trailer_if_missing *item, const char *value);
 
-void trailer_conf_set_where(enum trailer_where where, struct conf_info *conf_info);
-void trailer_conf_set_if_exists(enum trailer_if_exists if_exists, struct conf_info *conf_info);
-void trailer_conf_set_if_missing(enum trailer_if_missing if_missing, struct conf_info *conf_info);
-struct conf_info *new_trailer_conf_info(void);
-void duplicate_conf(struct conf_info *dst, const struct conf_info *src);
+void trailer_conf_set_where(enum trailer_where where, struct trailer_conf *trailer_conf);
+void trailer_conf_set_if_exists(enum trailer_if_exists if_exists, struct trailer_conf *trailer_conf);
+void trailer_conf_set_if_missing(enum trailer_if_missing if_missing, struct trailer_conf *trailer_conf);
+struct trailer_conf *new_trailer_conf(void);
+void duplicate_conf(struct trailer_conf *dst, const struct trailer_conf *src);
 
 const char *default_separators(void);
 
-void add_trailer_injector(char *tok, char *val, const struct conf_info *conf,
+void add_trailer_injector(char *key, char *val, const struct trailer_conf *conf,
 			  struct list_head *injectors);
 
-struct process_trailer_options {
+struct trailer_processing_options {
 	int in_place;
 	int trim_empty;
 	int only_trailers;
@@ -58,24 +58,24 @@ struct process_trailer_options {
 	void *filter_data;
 };
 
-#define PROCESS_TRAILER_OPTIONS_INIT {0}
+#define TRAILER_PROCESSING_OPTIONS_INIT {0}
 
 void parse_trailer_injectors_from_config(struct list_head *config_head);
 
 void apply_trailer_injectors(struct list_head *injectors, struct list_head *trailers_head);
 
-ssize_t find_separator(const char *line, const char *separators);
+ssize_t find_separator(const char *trailer_string, const char *separators);
 
-void parse_trailer(const char *line, ssize_t separator_pos,
-		   struct strbuf *tok, struct strbuf *val,
-		   const struct conf_info **conf);
+void parse_trailer(const char *trailer_string, ssize_t separator_pos,
+		   struct strbuf *key, struct strbuf *val,
+		   const struct trailer_conf **conf);
 
 struct trailer_block *parse_trailers(const char *str,
-				     const struct process_trailer_options *opts,
-				     struct list_head *head);
+				     const struct trailer_processing_options *opts,
+				     struct list_head *trailers);
 
 struct trailer_block *trailer_block_get(const char *str,
-					const struct process_trailer_options *opts);
+					const struct trailer_processing_options *opts);
 
 size_t trailer_block_start(struct trailer_block *trailer_block);
 size_t trailer_block_end(struct trailer_block *trailer_block);
@@ -88,14 +88,14 @@ void free_trailers(struct list_head *trailers);
 void free_trailer_injectors(struct list_head *trailer_injectors);
 
 void format_trailers(struct list_head *head,
-		     const struct process_trailer_options *opts,
+		     const struct trailer_processing_options *opts,
 		     struct strbuf *out);
 /*
  * Convenience function to format the trailers from the commit msg "msg" into
  * the strbuf "out". Reuses format_trailers internally.
  */
 void format_trailers_from_commit(const char *msg,
-				 const struct process_trailer_options *opts,
+				 const struct trailer_processing_options *opts,
 				 struct strbuf *out);
 
 /*

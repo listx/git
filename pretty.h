@@ -7,7 +7,7 @@
 struct commit;
 struct repository;
 struct strbuf;
-struct process_trailer_options;
+struct trailer_processing_options;
 
 /* Commit formats */
 enum cmit_fmt {
@@ -152,10 +152,10 @@ void format_sanitized_subject(struct strbuf *sb, const char *msg, size_t len);
 int has_non_ascii(const char *text);
 
 /*
- * Set values of fields in "struct process_trailer_options"
+ * Set values of fields in "struct trailer_processing_options"
  * according to trailers arguments.
  */
-int format_set_trailers_options(struct process_trailer_options *opts,
+int format_set_trailers_options(struct trailer_processing_options *opts,
 			struct string_list *filter_list,
 			struct strbuf *sepbuf,
 			struct strbuf *kvsepbuf,

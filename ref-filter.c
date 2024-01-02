@@ -200,7 +200,7 @@ static struct used_atom {
 		struct {
 			enum { C_BARE, C_BODY, C_BODY_DEP, C_LENGTH, C_LINES,
 			       C_SIG, C_SUB, C_SUB_SANITIZE, C_TRAILERS } option;
-			struct process_trailer_options trailer_opts;
+			struct trailer_processing_options trailer_opts;
 			unsigned int nlines;
 		} contents;
 		struct {

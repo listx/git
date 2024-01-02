@@ -370,6 +370,46 @@ test_expect_success 'multiline field treated as atomic for placement' '
 	test_cmp expected actual
 '
 
+# If we want to replace a trailer, but there is more than one match, expect to
+# replace the one where we would have placed the new (identical-key) trailer. In
+# this case the default placement is at the end, so replace the last one.
+test_expect_success 'replacement with multiple matches (default)' '
+	cat >patch <<-\EOF &&
+
+		foo: 1
+		foo: 2
+		foo: 3
+	EOF
+	cat >expected <<-\EOF &&
+
+		foo: 1
+		foo: 2
+		foo: NEW VALUE
+	EOF
+	test_config trailer.foo.ifexists replace &&
+	git interpret-trailers --trailer "foo: NEW VALUE" patch >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'replacement with multiple matches (first one replaced)' '
+	cat >patch <<-\EOF &&
+
+		foo: 1
+		foo: 2
+		foo: 3
+	EOF
+	cat >expected <<-\EOF &&
+
+		foo: NEW VALUE
+		foo: 2
+		foo: 3
+	EOF
+	test_config trailer.foo.where start &&
+	test_config trailer.foo.ifexists replace &&
+	git interpret-trailers --trailer "foo: NEW VALUE" patch >actual &&
+	test_cmp expected actual
+'
+
 test_expect_success 'multiline field treated as atomic for replacement' '
 	q_to_tab >patch <<-\EOF &&
 

@@ -41,10 +41,10 @@ struct trailer_conf *new_trailer_conf(void);
 void duplicate_trailer_conf(struct trailer_conf *dst,
 			    const struct trailer_conf *src);
 const char *trailer_default_separators(void);
-void add_trailer_template(char *tok, char *val, const struct trailer_conf *,
+void add_trailer_template(char *key, char *val, const struct trailer_conf *,
 			  struct list_head *templates);
 
-struct process_trailer_options {
+struct trailer_processing_options {
 	int in_place;
 	int trim_empty;
 	int only_trailers;
@@ -59,14 +59,14 @@ struct process_trailer_options {
 	void *filter_data;
 };
 
-#define PROCESS_TRAILER_OPTIONS_INIT {0}
+#define TRAILER_PROCESSING_OPTIONS_INIT {0}
 
 void parse_trailer_templates_from_config(struct list_head *config_head);
 
 void apply_trailer_templates(struct list_head *templates,
 			     struct list_head *trailers_head);
 
-ssize_t find_separator(const char *line, const char *separators);
+ssize_t find_separator(const char *trailer_string, const char *separators);
 
 /*
  * Given some input string "str", return a pointer to an opaque trailer_block
@@ -98,11 +98,11 @@ ssize_t find_separator(const char *line, const char *separators);
  * any synchronization between the two. In the future we should be able to
  * reduce the duplication and use just the linked list.
  */
-void parse_trailer(const char *line, ssize_t separator_pos,
-		   struct strbuf *tok, struct strbuf *val,
+void parse_trailer(const char *trailer_string, ssize_t separator_pos,
+		   struct strbuf *key, struct strbuf *val,
 		   const struct trailer_conf **);
 
-struct trailer_block *parse_trailers(const struct process_trailer_options *,
+struct trailer_block *parse_trailers(const struct trailer_processing_options *,
 				     const char *str,
 				     struct list_head *trailer_objects);
 
@@ -132,7 +132,7 @@ int blank_line_before_trailer_block(struct trailer_block *);
 void trailer_block_release(struct trailer_block *);
 
 void trailer_config_init(void);
-void format_trailers(const struct process_trailer_options *,
+void format_trailers(const struct trailer_processing_options *,
 		     struct list_head *trailers,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
@@ -143,7 +143,7 @@ void free_trailer_templates(struct list_head *);
  * Convenience function to format the trailers from the commit msg "msg" into
  * the strbuf "out". Reuses format_trailers() internally.
  */
-void format_trailers_from_commit(const struct process_trailer_options *,
+void format_trailers_from_commit(const struct trailer_processing_options *,
 				 const char *msg,
 				 struct strbuf *out);
 

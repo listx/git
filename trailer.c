@@ -429,26 +429,20 @@ static void maybe_add_if_missing(struct trailer_template *template,
 	}
 }
 
-static int find_same_and_apply_arg(struct trailer_template *template,
-				   struct list_head *trailers)
+static struct trailer *find_existing_trailer(struct trailer_template *template,
+					     struct list_head *trailers)
 {
 	struct list_head *pos;
 	struct trailer *current;
-
-	enum trailer_where where = template->conf.where;
-	int backwards = after_or_end(where);
-
-	if (list_empty(trailers))
-		return 0;
+	int backwards = after_or_end(template->conf.where);
 
 	list_for_each_dir(pos, trailers, backwards) {
 		current = list_entry(pos, struct trailer, list);
-		if (!same_key(current, template))
-			continue;
-		maybe_add_if_exists(template, current, trailers);
-		return 1;
+		if (same_key(current, template))
+			return current;
 	}
-	return 0;
+
+	return NULL;
 }
 
 void apply_trailer_templates(struct list_head *templates,
@@ -456,16 +450,17 @@ void apply_trailer_templates(struct list_head *templates,
 {
 	struct list_head *pos, *p;
 	struct trailer_template *template;
+	struct trailer *existing_trailer = NULL;
 
 	list_for_each_safe(pos, p, templates) {
-		int applied = 0;
 		template = list_entry(pos, struct trailer_template, list);
 
 		list_del(pos);
 
-		applied = find_same_and_apply_arg(template, trailers);
-
-		if (!applied)
+		existing_trailer = find_existing_trailer(template, trailers);
+		if (existing_trailer)
+			maybe_add_if_exists(template, existing_trailer, trailers);
+		else
 			maybe_add_if_missing(template, trailers);
 	}
 

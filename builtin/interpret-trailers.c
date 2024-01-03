@@ -58,6 +58,7 @@ static int option_parse_if_missing(const struct option *opt,
 }
 
 static char *cl_separators;
+static struct trailer_subsystem_conf *tsc;
 
 /*
  * Interpret "--trailer ..." as trailer templates (trailers we want to add into
@@ -69,7 +70,6 @@ static int option_parse_trailer_template(const struct option *opt,
 	struct list_head *templates = opt->value;
 	struct strbuf key = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
-	const struct trailer_conf *conf;
 	struct trailer_conf *conf_current = new_trailer_conf();
 	ssize_t separator_pos;
 
@@ -83,8 +83,7 @@ static int option_parse_trailer_template(const struct option *opt,
 
 	separator_pos = find_separator(arg, cl_separators);
 	if (separator_pos) {
-		parse_trailer(arg, separator_pos, &key, &val, &conf);
-		duplicate_trailer_conf(conf_current, conf);
+		parse_trailer(arg, separator_pos, tsc, &key, &val, conf_current);
 
 		/*
 		 * Override conf_current with settings specified via CLI flags.
@@ -244,17 +243,18 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 	};
 
 	git_config(git_default_config, NULL);
-	trailer_config_init();
+	tsc = trailer_subsystem_init();
+	opts.tsc = tsc;
 
 	if (!opts.only_input) {
-		parse_trailer_templates_from_config(&configured_templates);
+		get_independent_trailer_templates_from(tsc, &configured_templates);
 	}
 
 	/*
 	* In command-line arguments, '=' is accepted (in addition to the
 	* separators that are defined).
 	*/
-	cl_separators = xstrfmt("=%s", trailer_default_separators());
+	cl_separators = xstrfmt("=%s", trailer_default_separators(tsc));
 
 	argc = parse_options(argc, argv, prefix, options,
 			     git_interpret_trailers_usage, 0);

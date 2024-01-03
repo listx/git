@@ -58,6 +58,7 @@ static int option_parse_if_missing(const struct option *opt,
 }
 
 static char *cl_separators;
+static struct trailer_subsystem_conf *tsc;
 
 /*
  * Interpret "--trailer ..." as trailer injectors (trailers we want to inject
@@ -83,7 +84,7 @@ static int option_parse_trailer_injector(const struct option *opt,
 
 	separator_pos = find_separator(arg, cl_separators);
 	if (separator_pos) {
-		parse_trailer(arg, separator_pos, &key, &val, &conf);
+		parse_trailer(arg, separator_pos, tsc, &key, &val, &conf);
 		duplicate_trailer_conf(conf_current, conf);
 
 		/*
@@ -168,6 +169,7 @@ static void read_from(const char *file, struct strbuf *out)
  */
 static void interpret_trailers(const char *file,
 			       const struct trailer_processing_options *opts,
+			       struct trailer_subsystem_conf *tsc,
 			       struct list_head *injectors)
 {
 	struct strbuf input = STRBUF_INIT;
@@ -181,7 +183,7 @@ static void interpret_trailers(const char *file,
 	if (opts->in_place)
 		outfile = create_in_place_tempfile(file);
 
-	trailer_block = parse_trailers(input.buf, opts, &trailers_from_input);
+	trailer_block = parse_trailers(input.buf, opts, tsc, &trailers_from_input);
 
 	/* Print the lines before the trailer block */
 	if (!opts->only_trailers)
@@ -196,7 +198,7 @@ static void interpret_trailers(const char *file,
 	}
 
 	/* Print trailer block. */
-	format_trailers(&trailers_from_input, opts, &tb);
+	format_trailers(&trailers_from_input, opts, tsc, &tb);
 	fwrite(tb.buf, 1, tb.len, outfile);
 	strbuf_release(&tb);
 
@@ -244,17 +246,17 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 	};
 
 	git_config(git_default_config, NULL);
-	trailer_config_init();
+	tsc = trailer_config_init();
 
 	if (!opts.only_input) {
-		parse_trailer_injectors_from_config(&configured_injectors);
+		get_independent_trailer_injectors_from(tsc, &configured_injectors);
 	}
 
 	/*
 	* In command-line arguments, '=' is accepted (in addition to the
 	* separators that are defined).
 	*/
-	cl_separators = xstrfmt("=%s", default_separators());
+	cl_separators = xstrfmt("=%s", default_separators(tsc));
 
 	argc = parse_options(argc, argv, prefix, options,
 			     git_interpret_trailers_usage, 0);
@@ -272,11 +274,11 @@ int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)
 	if (argc) {
 		int i;
 		for (i = 0; i < argc; i++)
-			interpret_trailers(argv[i], &opts, &injectors);
+			interpret_trailers(argv[i], &opts, tsc, &injectors);
 	} else {
 		if (opts.in_place)
 			die(_("no input file given for in-place editing"));
-		interpret_trailers(NULL, &opts, &injectors);
+		interpret_trailers(NULL, &opts, tsc, &injectors);
 	}
 
 	free_trailer_injectors(&injectors);

@@ -11,6 +11,23 @@
  * Copyright (c) 2013, 2014 Christian Couder <chriscool@tuxfamily.org>
  */
 
+struct trailer_conf {
+	char *key_alias;
+	char *key;
+	char *command;
+	char *cmd;
+	enum trailer_where where;
+	enum trailer_if_exists if_exists;
+	enum trailer_if_missing if_missing;
+};
+
+struct trailer_subsystem_conf {
+	char *separators;
+	struct trailer_conf conf;
+	struct list_head *injectors;
+	int configured;
+};
+
 struct trailer_block {
 	/*
 	 * True if there is a blank line before the location pointed to by
@@ -33,16 +50,6 @@ struct trailer_block {
 	size_t trailer_nr;
 };
 
-struct trailer_conf {
-	char *key_alias;
-	char *key;
-	char *command;
-	char *cmd;
-	enum trailer_where where;
-	enum trailer_if_exists if_exists;
-	enum trailer_if_missing if_missing;
-};
-
 /*
  * An interface for iterating over the trailers found in a particular commit
  * message. Use like:
@@ -54,6 +61,7 @@ struct trailer_conf {
  */
 struct trailer_iter {
 	struct trailer_block *trailer_block;
+	struct trailer_subsystem_conf *tsc;
 	size_t cur;
 
 	/*
@@ -93,8 +101,6 @@ const char *trailer_iter_val(struct trailer_iter *iter)
 	return iter->val.buf;
 }
 
-static struct trailer_conf default_trailer_conf;
-
 struct trailer {
 	struct list_head list;
 	/*
@@ -113,16 +119,10 @@ struct trailer_injector {
 	struct trailer *target;
 };
 
-static LIST_HEAD(injectors_from_conf);
-
-static char *separators = ":";
-
-const char *default_separators(void)
+const char *default_separators(struct trailer_subsystem_conf *tsc)
 {
-	return separators;
+	return tsc->separators;
 }
-
-static int configured;
 
 #define TRAILER_ARG_STRING "$ARG"
 
@@ -543,13 +543,15 @@ void duplicate_conf(struct trailer_conf *dst, const struct trailer_conf *src)
 	dst->cmd = xstrdup_or_null(src->cmd);
 }
 
-static struct trailer_injector *get_or_add_injector_by(const char *key_alias)
+static struct trailer_injector *get_or_add_injector_by(const char *key_alias,
+						       struct trailer_conf *conf,
+						       struct list_head *injectors)
 {
 	struct list_head *pos;
 	struct trailer_injector *injector;
 
 	/* Look up injector with same key_alias */
-	list_for_each(pos, &injectors_from_conf) {
+	list_for_each(pos, injectors) {
 		injector = list_entry(pos, struct trailer_injector, list);
 		if (!strcasecmp(injector->conf.key_alias, key_alias))
 			return injector;
@@ -557,11 +559,11 @@ static struct trailer_injector *get_or_add_injector_by(const char *key_alias)
 
 	/* Injector does not already exists, create it */
 	CALLOC_ARRAY(injector, 1);
-	duplicate_conf(&injector->conf, &default_trailer_conf);
+	duplicate_conf(&injector->conf, conf);
 	injector->conf.key_alias = xstrdup(key_alias);
 	injector->target = NULL;
 
-	list_add_tail(&injector->list, &injectors_from_conf);
+	list_add_tail(&injector->list, injectors);
 
 	return injector;
 }
@@ -581,44 +583,46 @@ static struct {
 	{ "ifmissing", TRAILER_IF_MISSING }
 };
 
-static int git_trailer_default_config(const char *conf_key, const char *value,
+static int git_trailer_config_general(const char *conf_key, const char *value,
 				      const struct config_context *ctx UNUSED,
-				      void *cb UNUSED)
+				      void *cb_data)
 {
 	const char *trailer, *variable_name;
+	struct trailer_subsystem_conf *tsc;
 
 	if (!skip_prefix(conf_key, "trailer.", &trailer))
 		return 0;
 
 	variable_name = strrchr(trailer, '.');
 	if (!variable_name) {
+		tsc = (struct trailer_subsystem_conf *)cb_data;
 		if (!strcmp(trailer, "where")) {
-			if (trailer_set_where(&default_trailer_conf.where,
+			if (trailer_set_where(&tsc->conf.where,
 					      value) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer, "ifexists")) {
-			if (trailer_set_if_exists(&default_trailer_conf.if_exists,
+			if (trailer_set_if_exists(&tsc->conf.if_exists,
 						  value) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer, "ifmissing")) {
-			if (trailer_set_if_missing(&default_trailer_conf.if_missing,
+			if (trailer_set_if_missing(&tsc->conf.if_missing,
 						   value) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer, "separators")) {
 			if (!value)
 				return config_error_nonbool(conf_key);
-			separators = xstrdup(value);
+			tsc->separators = xstrdup(value);
 		}
 	}
 	return 0;
 }
 
-static int git_trailer_config(const char *conf_key, const char *value,
-			      const struct config_context *ctx UNUSED,
-			      void *cb UNUSED)
+static int git_trailer_config_by_key_alias(const char *conf_key, const char *value,
+					   const struct config_context *ctx UNUSED,
+					   void *cb_data)
 {
 	const char *trailer, *variable_name;
 	struct trailer_injector *injector;
@@ -626,6 +630,7 @@ static int git_trailer_config(const char *conf_key, const char *value,
 	char *key_alias = NULL;
 	enum trailer_info_type type;
 	int i;
+	struct trailer_subsystem_conf *tsc;
 
 	if (!skip_prefix(conf_key, "trailer.", &trailer))
 		return 0;
@@ -646,7 +651,10 @@ static int git_trailer_config(const char *conf_key, const char *value,
 	if (!key_alias)
 		return 0;
 
-	injector = get_or_add_injector_by(key_alias);
+	tsc = (struct trailer_subsystem_conf *)cb_data;
+	injector = get_or_add_injector_by(key_alias,
+					  &tsc->conf,
+					  tsc->injectors);
 	conf = &injector->conf;
 	free(key_alias);
 
@@ -690,18 +698,38 @@ static int git_trailer_config(const char *conf_key, const char *value,
 	return 0;
 }
 
-void trailer_config_init(void)
+struct trailer_subsystem_conf *trailer_config_init(void)
 {
-	if (configured)
-		return;
+	static struct trailer_subsystem_conf default_tsc;
+	static LIST_HEAD(injectors);
+	default_tsc.injectors = &injectors;
 
-	/* Default config must be setup first */
-	default_trailer_conf.where = WHERE_END;
-	default_trailer_conf.if_exists = EXISTS_ADD_IF_DIFFERENT_NEIGHBOR;
-	default_trailer_conf.if_missing = MISSING_ADD;
-	git_config(git_trailer_default_config, NULL);
-	git_config(git_trailer_config, NULL);
-	configured = 1;
+	if (default_tsc.configured)
+		return &default_tsc;
+
+	/*
+	 * Set hardcoded defaults, to be used as fallback in the absence of
+	 * any configuration.
+	 */
+	default_tsc.separators = ":";
+	default_tsc.conf.where = WHERE_END;
+	default_tsc.conf.if_exists = EXISTS_ADD_IF_DIFFERENT_NEIGHBOR;
+	default_tsc.conf.if_missing = MISSING_ADD;
+
+	/*
+	 * Overwrite hardcoded defaults from above.
+	 */
+	git_config(git_trailer_config_general, &default_tsc);
+
+	/*
+	 * Populate default_tsc.injectors, using the (possibly new) defaults
+	 * gleaned from running git_trailer_config_general().
+	 */
+	git_config(git_trailer_config_by_key_alias, &default_tsc);
+
+	default_tsc.configured = 1;
+
+	return &default_tsc;
 }
 
 static const char *key_or_key_alias_from(struct trailer_injector *injector, char *tok)
@@ -760,6 +788,7 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
  * If separator_pos is -1, interpret the whole trailer as a key.
  */
 void parse_trailer(const char *trailer_string, ssize_t separator_pos,
+		   struct trailer_subsystem_conf *tsc,
 		   struct strbuf *key, struct strbuf *val,
 		   const struct trailer_conf **conf)
 {
@@ -780,8 +809,8 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 	/* Lookup if the key matches something in the config */
 	key_len = key_len_without_separator(key->buf, key->len);
 	if (conf)
-		*conf = &default_trailer_conf;
-	list_for_each(pos, &injectors_from_conf) {
+		*conf = &tsc->conf;
+	list_for_each(pos, tsc->injectors) {
 		injector = list_entry(pos, struct trailer_injector, list);
 		if (key_matches_injector(key->buf, injector, key_len)) {
 			char *key_buf = strbuf_detach(key, NULL);
@@ -814,17 +843,18 @@ void add_trailer_injector(char *key, char *val, const struct trailer_conf *conf,
 	list_add_tail(&injector->list, injectors);
 }
 
-void parse_trailer_injectors_from_config(struct list_head *config_head)
+void get_independent_trailer_injectors_from(struct trailer_subsystem_conf *tsc,
+					    struct list_head *out)
 {
 	struct trailer_injector *injector;
 	struct list_head *pos;
 
 	/* Read in configured trailers as injectors. */
-	list_for_each(pos, &injectors_from_conf) {
+	list_for_each(pos, tsc->injectors) {
 		injector = list_entry(pos, struct trailer_injector, list);
 		if (injector->conf.command)
 			add_trailer_injector(xstrdup(key_or_key_alias_from(injector, NULL)),
-					     xstrdup(""), &injector->conf, config_head);
+					     xstrdup(""), &injector->conf, out);
 	}
 }
 
@@ -908,7 +938,8 @@ static size_t find_end_of_log_message(const char *input, int no_divider)
  * Return the position of the first trailer line or len if there are no
  * trailers.
  */
-static size_t find_trailer_block_start(const char *buf, size_t len)
+static size_t find_trailer_block_start(const char *buf, size_t len,
+				       struct trailer_subsystem_conf *tsc)
 {
 	const char *s;
 	ssize_t end_of_title, l;
@@ -972,7 +1003,7 @@ static size_t find_trailer_block_start(const char *buf, size_t len)
 			}
 		}
 
-		separator_pos = find_separator(bol, separators);
+		separator_pos = find_separator(bol, tsc->separators);
 		if (separator_pos >= 1 && !isspace(bol[0])) {
 			struct list_head *pos;
 
@@ -986,7 +1017,7 @@ static size_t find_trailer_block_start(const char *buf, size_t len)
 			 * identify trailer lines by comparing their keys with
 			 * those found in configured trailers.
 			 */
-			list_for_each(pos, &injectors_from_conf) {
+			list_for_each(pos, tsc->injectors) {
 				struct trailer_injector *injector;
 				injector = list_entry(pos, struct trailer_injector, list);
 				if (key_matches_injector(bol, injector,
@@ -1046,6 +1077,7 @@ static void unfold_value(struct strbuf *val)
 
 void format_trailers(struct list_head *head,
 		     const struct trailer_processing_options *opts,
+		     struct trailer_subsystem_conf *tsc,
 		     struct strbuf *out)
 {
 	struct list_head *pos;
@@ -1085,8 +1117,8 @@ void format_trailers(struct list_head *head,
 					else {
 						c = last_non_space_char(key.buf);
 						if (c) {
-							if (!strchr(separators, c))
-								strbuf_addf(out, "%c ", separators[0]);
+							if (!strchr(tsc->separators, c))
+								strbuf_addf(out, "%c ", tsc->separators[0]);
 						}
 					}
 				}
@@ -1123,7 +1155,8 @@ static struct trailer_block *trailer_block_new(void)
 }
 
 static struct trailer_block *trailer_block_get(const char *str,
-					       const struct trailer_processing_options *opts)
+					       const struct trailer_processing_options *opts,
+					       struct trailer_subsystem_conf *tsc)
 {
 	struct trailer_block *trailer_block = trailer_block_new();
 	size_t end_of_log_message = 0, trailer_block_start = 0;
@@ -1132,10 +1165,8 @@ static struct trailer_block *trailer_block_get(const char *str,
 	size_t nr = 0, alloc = 0;
 	char **last = NULL;
 
-	trailer_config_init();
-
 	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
-	trailer_block_start = find_trailer_block_start(str, end_of_log_message);
+	trailer_block_start = find_trailer_block_start(str, end_of_log_message, tsc);
 
 	trailer_block_lines = strbuf_split_buf(str + trailer_block_start,
 					       end_of_log_message - trailer_block_start,
@@ -1151,7 +1182,7 @@ static struct trailer_block *trailer_block_get(const char *str,
 		}
 		ALLOC_GROW(trailer_strings, nr + 1, alloc);
 		trailer_strings[nr] = strbuf_detach(*ptr, NULL);
-		last = find_separator(trailer_strings[nr], separators) >= 1
+		last = find_separator(trailer_strings[nr], tsc->separators) >= 1
 			? &trailer_strings[nr]
 			: NULL;
 		nr++;
@@ -1175,6 +1206,7 @@ static struct trailer_block *trailer_block_get(const char *str,
  */
 struct trailer_block *parse_trailers(const char *str,
 				     const struct trailer_processing_options *opts,
+				     struct trailer_subsystem_conf *tsc,
 				     struct list_head *trailers)
 {
 	struct trailer_block *trailer_block;
@@ -1182,16 +1214,16 @@ struct trailer_block *parse_trailers(const char *str,
 	struct strbuf val = STRBUF_INIT;
 	size_t i;
 
-	trailer_block = trailer_block_get(str, opts);
+	trailer_block = trailer_block_get(str, opts, tsc);
 
 	for (i = 0; i < trailer_block->trailer_nr; i++) {
 		int separator_pos;
 		char *trailer_string = trailer_block->trailer_strings[i];
 		if (trailer_string[0] == comment_line_char)
 			continue;
-		separator_pos = find_separator(trailer_string, separators);
+		separator_pos = find_separator(trailer_string, tsc->separators);
 		if (separator_pos >= 1) {
-			parse_trailer(trailer_string, separator_pos, &key, &val, NULL);
+			parse_trailer(trailer_string, separator_pos, tsc, &key, &val, NULL);
 			if (opts->unfold)
 				unfold_value(&val);
 			add_trailer(trailers,
@@ -1257,7 +1289,8 @@ void format_trailers_from_commit(const char *msg,
 				 struct strbuf *out)
 {
 	LIST_HEAD(trailers);
-	struct trailer_block *trailer_block = parse_trailers(msg, opts, &trailers);
+	struct trailer_subsystem_conf *tsc = trailer_config_init();
+	struct trailer_block *trailer_block = parse_trailers(msg, opts, tsc, &trailers);
 
 	/* If we want the whole block untouched, we can take the fast path. */
 	if (!opts->only_trailers && !opts->unfold && !opts->filter &&
@@ -1266,7 +1299,7 @@ void format_trailers_from_commit(const char *msg,
 		strbuf_add(out, msg + trailer_block->start,
 			   trailer_block->end - trailer_block->start);
 	} else
-		format_trailers(&trailers, opts, out);
+		format_trailers(&trailers, opts, tsc, out);
 
 	free_trailers(&trailers);
 	trailer_block_release(trailer_block);
@@ -1280,7 +1313,8 @@ struct trailer_iter *trailer_iter_init(const char *msg)
 	strbuf_init(&iter->val, 0);
 	strbuf_init(&iter->raw, 0);
 	opts.no_divider = 1;
-	iter->trailer_block = trailer_block_get(msg, &opts);
+	iter->tsc = trailer_config_init();
+	iter->trailer_block = trailer_block_get(msg, &opts, iter->tsc);
 	iter->cur = 0;
 
 	return iter;
@@ -1292,14 +1326,15 @@ int trailer_iter_advance(struct trailer_iter *iter)
 	int separator_pos;
 	if (iter->cur < iter->trailer_block->trailer_nr) {
 		trailer_string = iter->trailer_block->trailer_strings[iter->cur++];
-		separator_pos = find_separator(trailer_string, separators);
+		separator_pos = find_separator(trailer_string, iter->tsc->separators);
 		iter->is_trailer = (separator_pos > 0);
 
 		strbuf_reset(&iter->raw);
 		strbuf_addstr(&iter->raw, trailer_string);
 		strbuf_reset(&iter->key);
 		strbuf_reset(&iter->val);
-		parse_trailer(trailer_string, separator_pos, &iter->key, &iter->val, NULL);
+		parse_trailer(trailer_string, separator_pos,
+			      iter->tsc, &iter->key, &iter->val, NULL);
 		unfold_value(&iter->val);
 		return 1;
 	}

@@ -421,26 +421,23 @@ static void maybe_inject_if_missing(struct trailer_injector *injector,
 	}
 }
 
-static int find_same_and_apply_arg(struct trailer_injector *injector,
-				   struct list_head *trailers)
+static struct trailer *find_existing_trailer(struct trailer_injector *injector,
+					     struct list_head *trailers)
 {
 	struct list_head *pos;
 	struct trailer *current;
-
-	enum trailer_where where = injector->conf.where;
-	int backwards = after_or_end(where);
+	int backwards = after_or_end(injector->conf.where);
 
 	if (list_empty(trailers))
-		return 0;
+		return NULL;
 
 	list_for_each_dir(pos, trailers, backwards) {
 		current = list_entry(pos, struct trailer, list);
 		if (!same_key(current, injector))
 			continue;
-		maybe_inject_if_exists(injector, current, trailers);
-		return 1;
+		return current;
 	}
-	return 0;
+	return NULL;
 }
 
 void apply_trailer_injectors(struct list_head *injectors,
@@ -448,16 +445,17 @@ void apply_trailer_injectors(struct list_head *injectors,
 {
 	struct list_head *pos, *p;
 	struct trailer_injector *injector;
+	struct trailer *existing_trailer = NULL;
 
 	list_for_each_safe(pos, p, injectors) {
-		int applied = 0;
 		injector = list_entry(pos, struct trailer_injector, list);
 
 		list_del(pos);
 
-		applied = find_same_and_apply_arg(injector, trailers);
-
-		if (!applied)
+		existing_trailer = find_existing_trailer(injector, trailers);
+		if (existing_trailer)
+			maybe_inject_if_exists(injector, existing_trailer, trailers);
+		else
 			maybe_inject_if_missing(injector, trailers);
 	}
 

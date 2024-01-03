@@ -4,8 +4,19 @@
 #include "list.h"
 #include "strbuf.h"
 
-struct trailer_block;
+/*
+ * trailer_subsystem_conf holds all settings found from parsing "trailer.*"
+ * options. If there are "trailer.<keyAlias>.*" options, they are included in
+ * here.
+ */
+struct trailer_subsystem_conf;
+/*
+ * trailer_conf holds all "trailer.<keyAlias>.*" options for the same
+ * <keyAlias>.
+ */
 struct trailer_conf;
+
+struct trailer_block;
 struct trailer_iter;
 
 enum trailer_where {
@@ -42,12 +53,13 @@ struct trailer_conf *new_trailer_conf(void);
 void duplicate_trailer_conf(struct trailer_conf *dst,
 			    const struct trailer_conf *src);
 
-const char *default_separators(void);
+const char *default_separators(struct trailer_subsystem_conf *tsc);
 
 void add_trailer_template(char *key, char *val, const struct trailer_conf *conf,
 			  struct list_head *templates);
 
 struct trailer_processing_options {
+	struct trailer_subsystem_conf *tsc;
 	int in_place;
 	int trim_empty;
 	int only_trailers;
@@ -64,15 +76,17 @@ struct trailer_processing_options {
 
 #define TRAILER_PROCESSING_OPTIONS_INIT {0}
 
-void parse_trailer_templates_from_config(struct list_head *config_head);
+void get_independent_trailer_templates_from(struct trailer_subsystem_conf *tsc,
+					    struct list_head *out);
 
 void apply_trailer_templates(struct list_head *templates, struct list_head *trailers_head);
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
 void parse_trailer(const char *trailer_string, ssize_t separator_pos,
+		   struct trailer_subsystem_conf *tsc,
 		   struct strbuf *key, struct strbuf *val,
-		   const struct trailer_conf **conf);
+		   struct trailer_conf *conf);
 
 struct trailer_block *parse_trailers(const struct trailer_processing_options *opts,
 				     const char *str,
@@ -84,7 +98,7 @@ int blank_line_before_trailer_block(struct trailer_block *trailer_block);
 
 void trailer_block_release(struct trailer_block *trailer_block);
 
-void trailer_config_init(void);
+struct trailer_subsystem_conf *trailer_subsystem_init(void);
 void format_trailers(const struct trailer_processing_options *opts,
 		     struct list_head *trailers,
 		     struct strbuf *out);
@@ -94,7 +108,7 @@ void free_trailers(struct list_head *trailers);
  * Convenience function to format the trailers from the commit msg "msg" into
  * the strbuf "out". Reuses format_trailers internally.
  */
-void format_trailers_from_commit(const struct trailer_processing_options *opts,
+void format_trailers_from_commit(struct trailer_processing_options *opts,
 				 const char *msg,
 				 struct strbuf *out);
 

@@ -83,7 +83,7 @@ static int option_parse_trailer_template(const struct option *opt,
 
 	separator_pos = find_separator(arg, cl_separators);
 	if (separator_pos) {
-		parse_trailer(arg, separator_pos, tsc, &key, &val, conf_current);
+		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, conf_current);
 
 		/*
 		 * Override conf_current with settings specified via CLI flags.

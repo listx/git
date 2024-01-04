@@ -79,7 +79,8 @@ struct trailer_processing_options {
 void get_independent_trailer_templates_from(struct trailer_subsystem_conf *tsc,
 					    struct list_head *out);
 
-void apply_trailer_templates(struct list_head *templates, struct list_head *trailers_head);
+void apply_trailer_templates(struct list_head *templates,
+			     struct trailer_block *trailer_block);
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
@@ -88,9 +89,8 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 		   struct strbuf *key, struct strbuf *val,
 		   struct trailer_conf *conf);
 
-struct trailer_block *parse_trailers(const struct trailer_processing_options *opts,
-				     const char *str,
-				     struct list_head *trailers);
+struct trailer_block *parse_trailer_block(const struct trailer_processing_options *opts,
+					  const char *str);
 
 size_t trailer_block_start(struct trailer_block *);
 size_t trailer_block_end(struct trailer_block *);
@@ -99,8 +99,9 @@ int blank_line_before_trailer_block(struct trailer_block *);
 void trailer_block_release(struct trailer_block *);
 
 struct trailer_subsystem_conf *trailer_subsystem_init(void);
+
 void format_trailers(const struct trailer_processing_options *opts,
-		     struct list_head *trailers,
+		     struct trailer_block *trailer_block,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
 void free_trailer_templates(struct list_head *);

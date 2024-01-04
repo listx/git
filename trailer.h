@@ -78,7 +78,7 @@ void get_independent_trailer_templates_from(struct trailer_subsystem_conf *,
 					    struct list_head *out);
 
 void apply_trailer_templates(struct list_head *templates,
-			     struct list_head *trailers_head);
+			     struct trailer_block *);
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
@@ -117,9 +117,8 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 		   struct strbuf *key, struct strbuf *val,
 		   struct trailer_conf *);
 
-struct trailer_block *parse_trailers(const struct trailer_processing_options *,
-				     const char *str,
-				     struct list_head *trailer_objects);
+struct trailer_block *parse_trailer_block(const struct trailer_processing_options *,
+					  const char *str);
 
 /*
  * Return the offset of the start of the trailer block. That is, 0 is the start
@@ -148,7 +147,7 @@ void trailer_block_release(struct trailer_block *);
 
 struct trailer_subsystem_conf *trailer_subsystem_init(void);
 void format_trailers(const struct trailer_processing_options *,
-		     struct list_head *trailers,
+		     struct trailer_block *,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
 void free_trailer_conf(struct trailer_conf *);

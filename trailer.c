@@ -44,10 +44,6 @@ struct trailer_block {
 	size_t start, end;
 
 	/*
-	 * Array of trailer strings found.
-	 */
-	char **trailer_strings;
-	/*
 	 * List of trailers found. May contain non-trailers, in which case the
 	 * raw string that was used for this portion of the trailer block will
 	 * contain the string as seen before it was attempted to be parsed as a
@@ -69,7 +65,7 @@ struct trailer_block {
 struct trailer_iter {
 	struct trailer_block *trailer_block;
 	struct trailer_subsystem_conf *tsc;
-	size_t cur;
+	struct list_head *cur;
 
 	/*
 	 * Raw line (e.g., "foo: bar baz") before being parsed as a trailer
@@ -1242,14 +1238,14 @@ struct trailer_block *parse_trailer_block(const char *str,
 			list_add_tail(&trailer->list, trailer_block->trailers);
 		}
 	}
-
+	for (i = 0; i < trailer_block->trailer_nr; i++)
+		free(trailer_strings[i]);
 	strbuf_list_free(trailer_block_lines);
 
 	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,
 									trailer_block_start);
 	trailer_block->start = trailer_block_start;
 	trailer_block->end = end_of_log_message;
-	trailer_block->trailer_strings = trailer_strings;
 	trailer_block->trailer_nr = nr;
 
 	return trailer_block;
@@ -1291,10 +1287,6 @@ int blank_line_before_trailer_block(struct trailer_block *trailer_block)
 
 void trailer_block_release(struct trailer_block *trailer_block)
 {
-	size_t i;
-	for (i = 0; i < trailer_block->trailer_nr; i++)
-		free(trailer_block->trailer_strings[i]);
-	free(trailer_block->trailer_strings);
 	free_trailers(trailer_block->trailers);
 	free(trailer_block->trailers);
 	free(trailer_block);
@@ -1329,27 +1321,27 @@ struct trailer_iter *trailer_iter_init(const char *msg)
 	opts.no_divider = 1;
 	iter->tsc = trailer_config_init();
 	iter->trailer_block = parse_trailer_block(msg, &opts, iter->tsc);
-	iter->cur = 0;
-
+	iter->cur = iter->trailer_block->trailers->next;
 	return iter;
 }
 
 int trailer_iter_advance(struct trailer_iter *iter)
 {
-	char *trailer_string;
-	int separator_pos;
-	if (iter->cur < iter->trailer_block->trailer_nr) {
-		trailer_string = iter->trailer_block->trailer_strings[iter->cur++];
-		separator_pos = find_separator(trailer_string, iter->tsc->separators);
-		iter->is_trailer = (separator_pos > 0);
+	struct trailer *trailer;
+	if (iter->cur != iter->trailer_block->trailers) {
+		trailer = list_entry(iter->cur, struct trailer, list);
+		iter->is_trailer = trailer->key != NULL;
 
 		strbuf_reset(&iter->raw);
-		strbuf_addstr(&iter->raw, trailer_string);
+		strbuf_addstr(&iter->raw, trailer->raw);
 		strbuf_reset(&iter->key);
+		if (iter->is_trailer)
+			strbuf_addstr(&iter->key, trailer->key);
 		strbuf_reset(&iter->val);
-		parse_trailer(trailer_string, separator_pos,
-			      iter->tsc, &iter->key, &iter->val, NULL);
+		strbuf_addstr(&iter->val, trailer->value);
 		unfold_value(&iter->val);
+
+		iter->cur = iter->cur->next;
 		return 1;
 	}
 	return 0;

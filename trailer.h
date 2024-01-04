@@ -68,7 +68,8 @@ struct trailer_processing_options {
 void get_independent_trailer_injectors_from(struct trailer_subsystem_conf *tsc,
 					    struct list_head *out);
 
-void apply_trailer_injectors(struct list_head *injectors, struct list_head *trailers_head);
+void apply_trailer_injectors(struct list_head *injectors,
+			     struct trailer_block *trailer_block);
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
@@ -77,10 +78,9 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 		   struct strbuf *key, struct strbuf *val,
 		   const struct trailer_conf **conf);
 
-struct trailer_block *parse_trailers(const char *str,
-				     const struct trailer_processing_options *opts,
-				     struct trailer_subsystem_conf *tsc,
-				     struct list_head *trailers);
+struct trailer_block *parse_trailer_block(const char *str,
+					  const struct trailer_processing_options *opts,
+					  struct trailer_subsystem_conf *tsc);
 
 size_t trailer_block_start(struct trailer_block *trailer_block);
 size_t trailer_block_end(struct trailer_block *trailer_block);
@@ -92,7 +92,7 @@ struct trailer_subsystem_conf *trailer_config_init(void);
 void free_trailers(struct list_head *trailers);
 void free_trailer_injectors(struct list_head *trailer_injectors);
 
-void format_trailers(struct list_head *head,
+void format_trailers(struct trailer_block *trailer_block,
 		     const struct trailer_processing_options *opts,
 		     struct trailer_subsystem_conf *tsc,
 		     struct strbuf *out);

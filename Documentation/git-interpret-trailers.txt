@@ -27,7 +27,8 @@ Signed-off-by: Alice <alice@example.com>
 Signed-off-by: Bob <bob@example.com>
 ------------------------------------------------
 
-the last two lines starting with "Signed-off-by" are trailers.
+the last two lines starting with "Signed-off-by" are trailers, and are part of a
+"trailer block".
 
 This command reads commit messages from either the
 <file> arguments or the standard input if no <file> is specified.
@@ -36,7 +37,7 @@ coming from the input, without influencing them with any command line
 options or configuration variables.
 
 Otherwise, this command applies `trailer.*` configuration variables
-(which could potentially add new trailers, as well as reposition them),
+(which could potentially add new trailers, as well as replace existing ones),
 as well as any command line arguments that can override configuration
 variables (such as `--trailer=...` which could also add new trailers),
 to each input file. The result is emitted on the standard output.
@@ -51,12 +52,13 @@ this command and are emitted as is on the output, unless
 Some configuration variables control the way the `--trailer` arguments
 are applied to each input and the way any existing trailer in
 the input is changed. They also make it possible to
-automatically add some trailers.
+automatically add some trailers (see `trailer.command`).
 
 By default, a '<key>=<value>' or '<key>:<value>' argument given
 using `--trailer` will be appended after the existing trailers only if
 the last trailer has a different (<key>, <value>) pair (or if there
-is no existing trailer). The <key> and <value> parts will be trimmed
+is no existing trailer with the same <key>).
+The <key> and <value> parts will be trimmed
 to remove starting and trailing whitespace, and the resulting trimmed
 <key> and <value> will appear in the output like this:
 
@@ -65,24 +67,36 @@ key: value
 ------------------------------------------------
 
 This means that the trimmed <key> and <value> will be separated by
-`': '` (one colon followed by one space).
+`': '` (one colon followed by one space). You can also make it look like any of
+the following variations:
 
-For convenience, a <keyAlias> can be configured to make using `--trailer`
-shorter to type on the command line. This can be configured using the
-'trailer.<keyAlias>.key' configuration variable. The <keyAlias> must be a prefix
-of the full <key> string, although case sensitivity does not matter. For
-example, if you have
+------------------------------------------------
+key #value
+key=value
+key = value
+------------------------------------------------
+
+and such variations in the separator and the spacing around the separator are
+controlled by the `trailer.<keyAlias>.key` configuration variable. If you don't
+configure this variable, then by default the ": " separator will be used between
+the key and value.
+
+For convenience, the <keyAlias> in this variable can be a case-insensitive
+prefix of the <key>, like this:
 
 ------------------------------------------------
 trailer.sign.key "Signed-off-by: "
 ------------------------------------------------
 
-in your configuration, you only need to specify `--trailer="sign: foo"`
-on the command line instead of `--trailer="Signed-off-by: foo"`.
+which specifies a <key> of "Signed-off-by" and a <keyAlias> of
+"sign", such that you only need to type `--trailer "sign: foo"`
+on the command line instead of `--trailer "Signed-off-by: foo"`.
 
-By default the new trailer will appear at the end of all the existing
-trailers. If there is no existing trailer, the new trailer will appear
-at the end of the input. A blank line will be added before the new
+By default, new trailers will be added at the end of the trailer block, assuming
+that the trailer (the full "<key>: <value>" string) is missing from the block.
+If it already exists at the bottom of the block, then the trailer will still be
+added if adding it will not result in a duplicate line. If there was no trailer
+block to begin with, a blank line will be added before the new
 trailer if there isn't one already.
 
 Existing trailers are extracted from the input by looking for
@@ -119,45 +133,48 @@ OPTIONS
 	the whole trailer will be removed from the output.
 	This applies to existing trailers as well as new trailers.
 
---trailer <key>[(=|:)<value>]::
+--trailer (<key>|<keyAlias>)[(=|:)<value>]::
 	Specify a (<key>, <value>) pair that should be applied as a
 	trailer to the inputs. See the description of this
 	command.
 
 --where <placement>::
 --no-where::
-	Specify where all new trailers will be added.  A setting
-	provided with '--where' overrides the `trailer.where` and any
+	For trailers provided with '--trailer', specify where they will be added.
+	This setting overrides the `trailer.where` and any
 	applicable `trailer.<keyAlias>.where` configuration variables
-	and applies to all '--trailer' options until the next occurrence of
+	for all subsequent '--trailer' options until the next occurrence of
 	'--where' or '--no-where'. Upon encountering '--no-where', clear the
 	effect of any previous use of '--where', such that the relevant configuration
-	variables are no longer overridden. Possible placements are `after`,
-	`before`, `end` or `start`.
+	variables are no longer overridden for any remaining '--trailer' options.
+	Possible placements are `after`, `before`, `end` or `start`.
 
 --if-exists <action>::
 --no-if-exists::
-	Specify what action will be performed when there is already at
-	least one trailer with the same <key> in the input.  A setting
-	provided with '--if-exists' overrides the `trailer.ifExists` and any
+	For trailers provided with '--trailer', specify what action will be
+	performed when there is already at
+	least one trailer with the same <key> in the input.  This setting
+	overrides the `trailer.ifExists` and any
 	applicable `trailer.<keyAlias>.ifExists` configuration variables
-	and applies to all '--trailer' options until the next occurrence of
+	for all subsequent '--trailer' options until the next occurrence of
 	'--if-exists' or '--no-if-exists'. Upon encountering '--no-if-exists, clear the
-	effect of any previous use of '--if-exists, such that the relevant configuration
-	variables are no longer overridden. Possible actions are `addIfDifferent`,
+	effect of any previous use of '--if-exists', such that the relevant configuration
+	variables are no longer overridden for any remaining '--trailer' options.
+	Possible actions are `addIfDifferent`,
 	`addIfDifferentNeighbor`, `add`, `replace` and `doNothing`.
 
 --if-missing <action>::
 --no-if-missing::
-	Specify what action will be performed when there is no other
-	trailer with the same <key> in the input.  A setting
-	provided with '--if-missing' overrides the `trailer.ifMissing` and any
+	For trailers provided with '--trailer', specify what action will be
+	performed when there is no other
+	trailer with the same <key> in the input.  This setting
+	overrides the `trailer.ifMissing` and any
 	applicable `trailer.<keyAlias>.ifMissing` configuration variables
-	and applies to all '--trailer' options until the next occurrence of
-	'--if-missing' or '--no-if-missing'. Upon encountering '--no-if-missing,
-	clear the effect of any previous use of '--if-missing, such that the relevant
-	configuration variables are no longer overridden. Possible actions are `doNothing`
-	or `add`.
+	for all subsequent '--trailer' options until the next occurrence of
+	'--if-missing' or '--no-if-missing'. Upon encountering '--no-if-missing',
+	clear the effect of any previous use of '--if-missing', such that the relevant
+	configuration variables are no longer overridden for any remaining
+	'--trailer' options. Possible actions are `doNothing` or `add`.
 
 --only-trailers::
 	Output only the trailers, not any other parts of the input.
@@ -189,7 +206,7 @@ CONFIGURATION VARIABLES
 trailer.separators::
 	This option tells which characters are recognized as trailer
 	separators. By default only ':' is recognized as a trailer
-	separator, except that '=' is always accepted on the command
+	separator, except that '=' is additionally accepted on the command
 	line for compatibility with other git commands.
 +
 The first character given by this option will be the default character
@@ -204,28 +221,27 @@ the default separator used, so by default trailers will appear like:
 the key and the value).
 
 trailer.where::
-	This option tells where a new trailer will be added.
+	Choose where new trailers will be added.
 +
 This can be `end`, which is the default, `start`, `after` or `before`.
 +
-If it is `end`, then each new trailer will appear at the end of the
-existing trailers.
+If it is `end`, then new trailers will try to add themselves at the end of the
+trailer block.
 +
-If it is `start`, then each new trailer will appear at the start,
-instead of the end, of the existing trailers.
+If it is `start`, then new trailers will try to add themselves at the start of
+the trailer block.
 +
-If it is `after`, then each new trailer will appear just after the
-last trailer with the same <key>.
+If it is `after`, then new trailers will try to add themselves after another
+(existing) trailer with the same <key>.
 +
-If it is `before`, then each new trailer will appear just before the
-first trailer with the same <key>.
+If it is `before`, then new trailers will try to add themselves just before
+another (existing) trailer with the same <key>.
 
 trailer.ifexists::
-	This option makes it possible to choose what action will be
-	performed when there is already at least one trailer with the
+	Choose what to do when there is already an existing trailer with the
 	same <key> in the input.
 +
-The valid values for this option are: `addIfDifferentNeighbor` (this
+This can be `addIfDifferentNeighbor` (this
 is the default), `addIfDifferent`, `add`, `replace` or `doNothing`.
 +
 With `addIfDifferentNeighbor`, a new trailer will be added only if no
@@ -239,26 +255,23 @@ With `add`, a new trailer will be added, even if some trailers with
 the same (<key>, <value>) pair are already in the input.
 +
 With `replace`, an existing trailer with the same <key> will be
-deleted and the new trailer will be added. The deleted trailer will be
-the closest one (with the same <key>) to the place where the new one
-will be added.
+deleted and the new trailer will be added in its original location.
 +
-With `doNothing`, nothing will be done; that is no new trailer will be
-added if there is already one with the same <key> in the input.
+With `doNothing`, nothing will be done (no new trailer will be
+added if there is already one with the same <key> in the input).
 
 trailer.ifmissing::
-	This option makes it possible to choose what action will be
-	performed when there is not yet any trailer with the same
+	Choose what to do when there is no other trailer with the same
 	<key> in the input.
 +
-The valid values for this option are: `add` (this is the default) and
+This can be `add` (this is the default) or
 `doNothing`.
 +
-With `add`, a new trailer will be added.
+With `add`, the trailer will be added.
 +
 With `doNothing`, nothing will be done.
 
-trailer.<keyAlias>.key::
+trailer.<keyAlias>.key = <key>::
 	Defines a <keyAlias> for the <key>. The <keyAlias> must be a
 	prefix (case does not matter) of the <key>. For example, in `git
 	config trailer.ack.key "Acked-by"` the "Acked-by" is the <key> and
@@ -266,7 +279,7 @@ trailer.<keyAlias>.key::
 	`--trailer "ack:..."` invocation on the command line using the "ack"
 	<keyAlias> instead of the longer `--trailer "Acked-by:..."`.
 +
-At the end of the <key>, a separator can appear and then some
+The <key> should end with a separator followed by one or more
 space characters. By default the only valid separator is ':',
 but this can be changed using the `trailer.separators` config
 variable.
@@ -291,37 +304,35 @@ trailer.<keyAlias>.ifmissing::
 
 trailer.<keyAlias>.command::
 	Deprecated in favor of 'trailer.<keyAlias>.cmd'.
-	This option behaves in the same way as 'trailer.<keyAlias>.cmd', except
-	that it doesn't pass anything as argument to the specified command.
-	Instead the first occurrence of substring $ARG is replaced by the
-	<value> that would be passed as argument.
+	This option behaves the same way as 'trailer.<keyAlias>.cmd', except
+	that it doesn't pass anything as an argument to the specified command.
+	Instead the first occurrence of the substring "$ARG" in the specified
+	command string is replaced by the
+	<value> from '--trailer <keyAlias>=<value>'. And then the command is
+	executed, with the final <value> of the resulting trailer coming from the
+	STDOUT of the command.
+
+	This setting also makes it so that this trailer is ALWAYS inserted, even if
+	a matching `--trailer ...` is not provided.
 +
 Note that $ARG in the user's command is
-only replaced once and that the original way of replacing $ARG is not safe.
+only replaced once and that this replacement of "$ARG" is not safe (your command
+may not be robust enough to handle it, depending on how you defined it).
 +
-When both 'trailer.<keyAlias>.cmd' and 'trailer.<keyAlias>.command' are given
+When both 'trailer.<keyAlias>.cmd' and 'trailer.<keyAlias>.command' are defined
 for the same <keyAlias>, 'trailer.<keyAlias>.cmd' is used and
 'trailer.<keyAlias>.command' is ignored.
 
 trailer.<keyAlias>.cmd::
-	This option can be used to specify a shell command that will be called
-	once to automatically add a trailer with the specified <keyAlias>, and then
-	called each time a '--trailer <keyAlias>=<value>' argument is specified to
-	modify the <value> of the trailer that this option would produce.
-+
-When the specified command is first called to add a trailer
-with the specified <keyAlias>, the behavior is as if a special
-'--trailer <keyAlias>=<value>' argument was added at the beginning
-of the "git interpret-trailers" command, where <value>
-is taken to be the standard output of the command with any
-leading and trailing whitespace trimmed off.
-+
-If some '--trailer <keyAlias>=<value>' arguments are also passed
-on the command line, the command is called again once for each
-of these arguments with the same <keyAlias>. And the <value> part
-of these arguments, if any, will be passed to the command as its
-first argument. This way the command can produce a <value> computed
-from the <value> passed in the '--trailer <keyAlias>=<value>' argument.
+	This option can be used to specify a shell command that will be called once
+	to automatically add a trailer with the specified <keyAlias> as the <key>
+	(if 'trailer.<keyAlias>.key = <key>' is not set). Then you can invoke it
+	with '--trailer <keyAlias>=<value>', and the <value> will be passed into the
+	command as the first argument, and the STDOUT ouput of that command will be
+	used as the final <value> of the resulting trailer, with any leading and
+	trailing whitespace trimmed off. This is especially useful if the <value>
+	requires precision and you want to have some degree of confidence against
+	typos.
 
 EXAMPLES
 --------

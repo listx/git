@@ -112,10 +112,12 @@ ssize_t find_separator(const char *trailer_string, const char *separators);
  * any synchronization between the two. In the future we should be able to
  * reduce the duplication and use just the linked list.
  */
-void parse_trailer(const char *trailer_string, ssize_t separator_pos,
-		   struct trailer_subsystem_conf *,
-		   struct strbuf *key, struct strbuf *val,
-		   struct trailer_conf *);
+void parse_trailer_against_config(const char *trailer_string,
+				  ssize_t separator_pos,
+				  struct trailer_subsystem_conf *,
+				  struct strbuf *key,
+				  struct strbuf *val,
+				  struct trailer_conf *);
 
 struct trailer_block *parse_trailer_block(const struct trailer_processing_options *,
 					  const char *str);

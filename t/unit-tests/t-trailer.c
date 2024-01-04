@@ -235,18 +235,18 @@ static void run_t_trailer_iterator(void)
 			{
 				{
 					.raw = "not a trailer line\n",
-					.key = "not a trailer line",
-					.val = "",
+					.key = "",
+					.val = "not a trailer line",
 				},
 				{
 					.raw = "not a trailer line\n",
-					.key = "not a trailer line",
-					.val = "",
+					.key = "",
+					.val = "not a trailer line",
 				},
 				{
 					.raw = "not a trailer line\n",
-					.key = "not a trailer line",
-					.val = "",
+					.key = "",
+					.val = "not a trailer line",
 				},
 				{
 					.raw = "Signed-off-by: x\n",

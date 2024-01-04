@@ -675,6 +675,41 @@ test_expect_success 'with basic patch' '
 	test_cmp expected actual
 '
 
+# Providing and not providing "--only-trailers" should agree to show the input
+# trailer block as is without modification.
+test_expect_success 'same trailer block with and without --only-trailers' '
+	cat complex_message_body complex_message_trailers >complex_message &&
+	git interpret-trailers complex_message | tail -n 4 >actual &&
+	sed -e "s/ Z\$/ /" >expected <<-\EOF &&
+		Fixes: Z
+		Acked-by: Z
+		Reviewed-by: Z
+		Signed-off-by: Z
+	EOF
+	git interpret-trailers complex_message --only-trailers >actual_only_trailers &&
+	test_cmp expected actual &&
+	test_cmp actual actual_only_trailers
+'
+
+# Providing and not providing "--only-trailers" should agree to show the input
+# trailer block as is without modification, even if there is configuration
+# suggesting how new trailers should be printed.
+test_expect_success 'same trailer block with and without --only-trailers, regardless of configuration' '
+	test_config trailer.separators ":=" &&
+	test_config trailer.ack.key "Acked-by= " &&
+	cat complex_message_body complex_message_trailers >complex_message &&
+	git interpret-trailers complex_message | tail -n 4 >actual &&
+	sed -e "s/ Z\$/ /" >expected <<-\EOF &&
+		Fixes: Z
+		Acked-by: Z
+		Reviewed-by: Z
+		Signed-off-by: Z
+	EOF
+	git interpret-trailers complex_message --only-trailers >actual_only_trailers &&
+	test_cmp expected actual &&
+	test_cmp actual actual_only_trailers
+'
+
 test_expect_success 'with commit complex message as argument' '
 	test_config trailer.separators ":=" &&
 	test_config trailer.ack.key "Acked-by= " &&
@@ -682,7 +717,7 @@ test_expect_success 'with commit complex message as argument' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
@@ -782,7 +817,7 @@ test_expect_success 'with commit complex message and trailer args' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
 		Acked-by= Peff
@@ -859,7 +894,7 @@ test_expect_success 'using "where = before"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
 		Acked-by= Peff
@@ -876,7 +911,7 @@ test_expect_success 'overriding configuration with "--where after"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -897,7 +932,7 @@ test_expect_success 'using "--where after" with "--no-where"' '
 		Bug #42
 		Fixes: Z
 		Acked-by= Peff
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
@@ -922,7 +957,7 @@ test_expect_success 'using "--where after" with "--no-where" defaults to configu
 		Bug #42
 		Acked-by= Peff
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
@@ -942,7 +977,7 @@ test_expect_success 'using "--no-where" defaults to harcoded default if nothing 
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -963,7 +998,7 @@ test_expect_success 'using "where = after"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -982,7 +1017,7 @@ test_expect_success 'using "where = end"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -1006,7 +1041,7 @@ test_expect_success 'using "where = start"' '
 		Reviewed-by: Johannes
 		Reviewed-by: Junio
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by: Z
 		Signed-off-by: Z
@@ -1029,10 +1064,10 @@ test_expect_success 'using "where = before" for a token in the middle of the mes
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Reviewed-by:Johan
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "ack: Peff" --trailer "bug: 42" \
@@ -1109,11 +1144,11 @@ test_expect_success 'the default is "ifExists = addIfDifferentNeighbor"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "ack: Peff" --trailer "review:" \
@@ -1134,10 +1169,10 @@ test_expect_success 'default "ifExists" is now "addIfDifferent"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Acked-by= Junio
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "ack: Peff" --trailer "review:" \
@@ -1159,8 +1194,8 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = end"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Acked-by= Peff
 	EOF
@@ -1184,8 +1219,8 @@ test_expect_success 'using "ifExists = addIfDifferent" with "where = before"' '
 		Bug #42
 		Fixes: Z
 		Acked-by= Peff
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "ack: Peff" --trailer "review:" \
@@ -1207,8 +1242,8 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor" with "where = end
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Acked-by= Peff
 		Acked-by= Junio
@@ -1236,11 +1271,11 @@ test_expect_success 'using "ifExists = addIfDifferentNeighbor"  with "where = af
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Tested-by: Jakub
 	EOF
@@ -1284,8 +1319,8 @@ test_expect_success 'using "ifExists = add" with "where = end"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Acked-by= Peff
 		Acked-by= Peff
@@ -1315,12 +1350,12 @@ test_expect_success 'using "ifExists = add" with "where = after"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Acked-by= Peff
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "ack: Peff" \
@@ -1330,6 +1365,9 @@ test_expect_success 'using "ifExists = add" with "where = after"' '
 	test_cmp expected actual
 '
 
+# Replace the trailer in the input which has "Reviewed-by: " (notice the
+# trailing space) with one without a space ("Reviewed-by:") because we specify
+# '--trailer "review:"' which has a zero-length value.
 test_expect_success 'overriding configuration with "--if-exists replace"' '
 	test_config trailer.fix.key "Fixes: " &&
 	test_config trailer.fix.ifExists "add" &&
@@ -1344,7 +1382,7 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: 22
-		Acked-by= Z
+		Acked-by: Z
 		Reviewed-by:
 		Signed-off-by: Z
 	EOF
@@ -1453,10 +1491,10 @@ test_expect_success 'using "ifExists = replace"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: 22
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" \
@@ -1481,10 +1519,10 @@ test_expect_success 'using "ifExists = replace" with "where = after"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: 22
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" \
@@ -1508,10 +1546,10 @@ test_expect_success 'using "ifExists = doNothing"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" --trailer "fix=53" \
@@ -1538,10 +1576,10 @@ test_expect_success 'the default is "ifMissing = add"' '
 		Bug #42
 		Cc: Linus
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" --trailer "fix=53" \
@@ -1563,10 +1601,10 @@ test_expect_success 'overriding configuration with "--if-missing doNothing"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --if-missing doNothing \
@@ -1588,10 +1626,10 @@ test_expect_success 'when default "ifMissing" is "doNothing"' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" --trailer "fix=53" \
@@ -1617,10 +1655,10 @@ test_expect_success 'using "ifMissing = add" with "where = end"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Cc: Linus
 	EOF
@@ -1648,10 +1686,10 @@ test_expect_success 'using "ifMissing = add" with "where = before"' '
 		Cc: Linus
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" --trailer "fix=53" \
@@ -1675,10 +1713,10 @@ test_expect_success 'using "ifMissing = doNothing"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --trailer "review:" --trailer "fix=53" \
@@ -1736,12 +1774,12 @@ test_expect_success 'default "where" is now "after"' '
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Bug #42
 		Fixes: Z
-		Acked-by= Z
+		Acked-by: Z
 		Acked-by= Peff
 		Acked-by= Peff
 		Acked-by= Junio
 		Acked-by= Peff
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Tested-by: Jakub
 		Tested-by: Johannes
@@ -1767,8 +1805,8 @@ test_expect_success 'with simple command' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: A U Thor <author@example.com>
 	EOF
@@ -1789,8 +1827,8 @@ test_expect_success 'with command using committer information' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: C O Mitter <committer@example.com>
 	EOF
@@ -1812,8 +1850,8 @@ test_expect_success 'with command using author information' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: A U Thor <author@example.com>
 	EOF
@@ -1846,8 +1884,8 @@ test_expect_success 'cmd takes precedence over command' '
 	cat complex_message_body >expected2 &&
 	sed -e "s/ Z\$/ /" >>expected2 <<-EOF &&
 		Fixes: $FIXED
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: A U Thor <author@example.com>
 	EOF
@@ -1871,8 +1909,8 @@ test_expect_success 'with command using $ARG' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-EOF &&
 		Fixes: $FIXED
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: A U Thor <author@example.com>
 	EOF
@@ -1895,8 +1933,8 @@ test_expect_success 'with failing command using $ARG' '
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-EOF &&
 		Fixes: Z
-		Acked-by= Z
-		Reviewed-by:
+		Acked-by: Z
+		Reviewed-by: Z
 		Signed-off-by: Z
 		Signed-off-by: A U Thor <author@example.com>
 	EOF

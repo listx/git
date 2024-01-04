@@ -97,7 +97,7 @@ static int option_parse_trailer_template(const struct option *opt,
 		strbuf_release(&sb);
 	} else {
 		struct trailer_conf *conf_current = new_trailer_conf();
-		parse_trailer(arg, separator_pos, tsc, &key, &val, conf_current);
+		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, conf_current);
 
 		/*
 		 * Override conf_current with settings specified via CLI flags.

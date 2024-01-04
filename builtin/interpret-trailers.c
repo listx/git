@@ -170,7 +170,6 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 			       const char *file)
 {
 	struct strbuf input = STRBUF_INIT;
-	LIST_HEAD(trailers_from_input);
 	struct strbuf tb = STRBUF_INIT;
 	struct trailer_block *trailer_block;
 	FILE *outfile = stdout;
@@ -180,7 +179,7 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 	if (opts->in_place)
 		outfile = create_in_place_tempfile(file);
 
-	trailer_block = parse_trailers(opts, input.buf, &trailers_from_input);
+	trailer_block = parse_trailer_block(opts, input.buf);
 
 	/* Print the lines before the trailer block */
 	if (!opts->only_trailers)
@@ -191,15 +190,13 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 
 
 	if (!opts->only_input) {
-		apply_trailer_templates(templates, &trailers_from_input);
+		apply_trailer_templates(templates, trailer_block);
 	}
 
 	/* Print trailer block. */
-	format_trailers(opts, &trailers_from_input, &tb);
+	format_trailers(opts, trailer_block, &tb);
 	fwrite(tb.buf, 1, tb.len, outfile);
 	strbuf_release(&tb);
-
-	free_trailers(&trailers_from_input);
 
 	/* Print the lines after the trailer block as is */
 	if (!opts->only_trailers)

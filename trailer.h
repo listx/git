@@ -84,10 +84,12 @@ void apply_trailer_templates(struct list_head *templates,
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
-void parse_trailer(const char *trailer_string, ssize_t separator_pos,
-		   struct trailer_subsystem_conf *tsc,
-		   struct strbuf *key, struct strbuf *val,
-		   struct trailer_conf *conf);
+void parse_trailer_against_config(const char *trailer_string,
+				  ssize_t separator_pos,
+				  struct trailer_subsystem_conf *tsc,
+				  struct strbuf *key,
+				  struct strbuf *val,
+				  struct trailer_conf *conf);
 
 struct trailer_block *parse_trailer_block(const struct trailer_processing_options *opts,
 					  const char *str);

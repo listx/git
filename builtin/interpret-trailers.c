@@ -84,7 +84,7 @@ static int option_parse_trailer_injector(const struct option *opt,
 
 	separator_pos = find_separator(arg, cl_separators);
 	if (separator_pos) {
-		parse_trailer(arg, separator_pos, tsc, &key, &val, &conf);
+		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, &conf);
 		duplicate_trailer_conf(conf_current, conf);
 
 		/*

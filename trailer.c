@@ -791,15 +791,10 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
  *
  * If separator_pos is -1, interpret the whole trailer as a key.
  */
-void parse_trailer(const char *trailer_string, ssize_t separator_pos,
-		   struct trailer_subsystem_conf *tsc,
-		   struct strbuf *key, struct strbuf *val,
-		   const struct trailer_conf **conf)
+static void parse_trailer(const char *trailer_string,
+			  ssize_t separator_pos,
+			  struct strbuf *key, struct strbuf *val)
 {
-	struct trailer_injector *injector;
-	size_t key_len;
-	struct list_head *pos;
-
 	if (separator_pos != -1) {
 		strbuf_add(key, trailer_string, separator_pos);
 		strbuf_trim(key);
@@ -809,6 +804,19 @@ void parse_trailer(const char *trailer_string, ssize_t separator_pos,
 		strbuf_addstr(key, trailer_string);
 		strbuf_trim(key);
 	}
+}
+
+void parse_trailer_against_config(const char *trailer_string,
+				  ssize_t separator_pos,
+				  struct trailer_subsystem_conf *tsc,
+				  struct strbuf *key, struct strbuf *val,
+				  const struct trailer_conf **conf)
+{
+	struct trailer_injector *injector;
+	size_t key_len;
+	struct list_head *pos;
+
+	parse_trailer(trailer_string, separator_pos, key, val);
 
 	/* Lookup if the key matches something in the config */
 	key_len = key_len_without_separator(key->buf, key->len);
@@ -1220,7 +1228,7 @@ struct trailer_block *parse_trailer_block(const char *str,
 		strbuf_addstr(&raw, trailer_string);
 		separator_pos = find_separator(trailer_string, tsc->separators);
 		if (separator_pos >= 1) {
-			parse_trailer(trailer_string, separator_pos, tsc, &key, &val, NULL);
+			parse_trailer(trailer_string, separator_pos, &key, &val);
 			if (opts->unfold)
 				unfold_value(&val);
 			trailer = trailer_from(strbuf_detach(&raw, NULL),

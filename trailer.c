@@ -47,6 +47,13 @@ struct trailer_block {
 	 * Array of trailer strings found.
 	 */
 	char **trailer_strings;
+	/*
+	 * List of trailers found. May contain non-trailers, in which case the
+	 * raw string that was used for this portion of the trailer block will
+	 * contain the string as seen before it was attempted to be parsed as a
+	 * trailer.
+	 */
+	struct list_head *trailers;
 	size_t trailer_nr;
 };
 
@@ -443,7 +450,7 @@ static struct trailer *find_existing_trailer(struct trailer_injector *injector,
 }
 
 void apply_trailer_injectors(struct list_head *injectors,
-			     struct list_head *trailers)
+			     struct trailer_block *trailer_block)
 {
 	struct list_head *pos, *p;
 	struct trailer_injector *injector;
@@ -454,11 +461,14 @@ void apply_trailer_injectors(struct list_head *injectors,
 
 		list_del(pos);
 
-		existing_trailer = find_existing_trailer(injector, trailers);
+		existing_trailer = find_existing_trailer(injector,
+							 trailer_block->trailers);
 		if (existing_trailer)
-			maybe_inject_if_exists(injector, existing_trailer, trailers);
+			maybe_inject_if_exists(injector, existing_trailer,
+					       trailer_block->trailers);
 		else
-			maybe_inject_if_missing(injector, trailers);
+			maybe_inject_if_missing(injector,
+						trailer_block->trailers);
 	}
 
 	free_trailer_injectors(injectors);
@@ -1074,7 +1084,7 @@ static void unfold_value(struct strbuf *val)
 	strbuf_release(&out);
 }
 
-void format_trailers(struct list_head *head,
+void format_trailers(struct trailer_block *trailer_block,
 		     const struct trailer_processing_options *opts,
 		     struct trailer_subsystem_conf *tsc,
 		     struct strbuf *out)
@@ -1083,7 +1093,7 @@ void format_trailers(struct list_head *head,
 	struct trailer *trailer;
 	int need_separator = 0;
 
-	list_for_each(pos, head) {
+	list_for_each(pos, trailer_block->trailers) {
 		trailer = list_entry(pos, struct trailer, list);
 		if (trailer->key) {
 			char c;
@@ -1150,12 +1160,14 @@ void format_trailers(struct list_head *head,
 static struct trailer_block *trailer_block_new(void)
 {
 	struct trailer_block *trailer_block = xcalloc(1, sizeof(*trailer_block));
+	trailer_block->trailers = xcalloc(1, sizeof(*trailer_block->trailers));
+	INIT_LIST_HEAD(trailer_block->trailers);
 	return trailer_block;
 }
 
-static struct trailer_block *trailer_block_get(const char *str,
-					       const struct trailer_processing_options *opts,
-					       struct trailer_subsystem_conf *tsc)
+struct trailer_block *parse_trailer_block(const char *str,
+					  const struct trailer_processing_options *opts,
+					  struct trailer_subsystem_conf *tsc)
 {
 	struct trailer_block *trailer_block = trailer_block_new();
 	size_t end_of_log_message = 0, trailer_block_start = 0;
@@ -1163,6 +1175,10 @@ static struct trailer_block *trailer_block_get(const char *str,
 	char **trailer_strings = NULL;
 	size_t nr = 0, alloc = 0;
 	char **last = NULL;
+	struct trailer *trailer;
+	int separator_pos;
+	size_t i;
+	char *trailer_string;
 
 	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
 	trailer_block_start = find_trailer_block_start(str, end_of_log_message, tsc);
@@ -1171,7 +1187,15 @@ static struct trailer_block *trailer_block_get(const char *str,
 					       end_of_log_message - trailer_block_start,
 					       '\n',
 					       0);
+	/*
+	 * Grow trailer_strings array. Notably, this keeps non-trailers lines,
+	 * but unfolds folded lines to be on a single line.
+	 */
 	for (ptr = trailer_block_lines; *ptr; ptr++) {
+		/*
+		 * Grow the last-parsed trailer if this line is a continuation
+		 * (starts with a space).
+		 */
 		if (last && isspace((*ptr)->buf[0])) {
 			struct strbuf sb = STRBUF_INIT;
 			strbuf_attach(&sb, *last, strlen(*last), strlen(*last));
@@ -1186,40 +1210,17 @@ static struct trailer_block *trailer_block_get(const char *str,
 			: NULL;
 		nr++;
 	}
-	strbuf_list_free(trailer_block_lines);
 
-	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,
-									trailer_block_start);
-	trailer_block->start = trailer_block_start;
-	trailer_block->end = end_of_log_message;
-	trailer_block->trailer_strings = trailer_strings;
-	trailer_block->trailer_nr = nr;
-
-	return trailer_block;
-}
-
-
-/*
- * Parse trailers in "str", populating the trailer_block info and "trailers"
- * linked list structure.
- */
-struct trailer_block *parse_trailers(const char *str,
-				     const struct trailer_processing_options *opts,
-				     struct trailer_subsystem_conf *tsc,
-				     struct list_head *trailers)
-{
-	struct trailer_block *trailer_block;
-	struct trailer *trailer;
-	struct strbuf raw = STRBUF_INIT;
-	struct strbuf key = STRBUF_INIT;
-	struct strbuf val = STRBUF_INIT;
-	size_t i;
-
-	trailer_block = trailer_block_get(str, opts, tsc);
-
-	for (i = 0; i < trailer_block->trailer_nr; i++) {
-		int separator_pos;
-		char *trailer_string = trailer_block->trailer_strings[i];
+	/*
+	 * Parse all lines in the trailer block. Note that we treat both trailer
+	 * strings and non-trailer strings as "trailers", by creating a
+	 * "trailer" for each one.
+	 */
+	for (i = 0; i < nr; i++) {
+		struct strbuf raw = STRBUF_INIT;
+		struct strbuf key = STRBUF_INIT;
+		struct strbuf val = STRBUF_INIT;
+		trailer_string = trailer_strings[i];
 		if (trailer_string[0] == comment_line_char)
 			continue;
 		strbuf_addstr(&raw, trailer_string);
@@ -1231,16 +1232,25 @@ struct trailer_block *parse_trailers(const char *str,
 			trailer = trailer_from(strbuf_detach(&raw, NULL),
 					       strbuf_detach(&key, NULL),
 					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailers);
+			list_add_tail(&trailer->list, trailer_block->trailers);
 		} else if (!opts->only_trailers) {
 			strbuf_addstr(&val, trailer_string);
 			strbuf_strip_suffix(&val, "\n");
 			trailer = trailer_from(strbuf_detach(&raw, NULL),
 					       NULL,
 					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailers);
+			list_add_tail(&trailer->list, trailer_block->trailers);
 		}
 	}
+
+	strbuf_list_free(trailer_block_lines);
+
+	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,
+									trailer_block_start);
+	trailer_block->start = trailer_block_start;
+	trailer_block->end = end_of_log_message;
+	trailer_block->trailer_strings = trailer_strings;
+	trailer_block->trailer_nr = nr;
 
 	return trailer_block;
 }
@@ -1285,6 +1295,8 @@ void trailer_block_release(struct trailer_block *trailer_block)
 	for (i = 0; i < trailer_block->trailer_nr; i++)
 		free(trailer_block->trailer_strings[i]);
 	free(trailer_block->trailer_strings);
+	free_trailers(trailer_block->trailers);
+	free(trailer_block->trailers);
 	free(trailer_block);
 }
 
@@ -1292,9 +1304,8 @@ void format_trailers_from_commit(const char *msg,
 				 const struct trailer_processing_options *opts,
 				 struct strbuf *out)
 {
-	LIST_HEAD(trailers);
 	struct trailer_subsystem_conf *tsc = trailer_config_init();
-	struct trailer_block *trailer_block = parse_trailers(msg, opts, tsc, &trailers);
+	struct trailer_block *trailer_block = parse_trailer_block(msg, opts, tsc);
 
 	/* If we want the whole block untouched, we can take the fast path. */
 	if (!opts->only_trailers && !opts->unfold && !opts->filter &&
@@ -1303,9 +1314,8 @@ void format_trailers_from_commit(const char *msg,
 		strbuf_add(out, msg + trailer_block->start,
 			   trailer_block->end - trailer_block->start);
 	} else
-		format_trailers(&trailers, opts, tsc, out);
+		format_trailers(trailer_block, opts, tsc, out);
 
-	free_trailers(&trailers);
 	trailer_block_release(trailer_block);
 }
 
@@ -1318,7 +1328,7 @@ struct trailer_iter *trailer_iter_init(const char *msg)
 	strbuf_init(&iter->raw, 0);
 	opts.no_divider = 1;
 	iter->tsc = trailer_config_init();
-	iter->trailer_block = trailer_block_get(msg, &opts, iter->tsc);
+	iter->trailer_block = parse_trailer_block(msg, &opts, iter->tsc);
 	iter->cur = 0;
 
 	return iter;

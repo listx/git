@@ -50,7 +50,6 @@ struct trailer_block {
 	 * trailer.
 	 */
 	struct list_head *trailers;
-	size_t trailer_nr;
 };
 
 /*
@@ -225,6 +224,26 @@ static char last_non_space_char(const char *s)
 		if (!isspace(s[i]))
 			return s[i];
 	return '\0';
+}
+
+static int space_exists_before_separator(const char *s, ssize_t separator_pos)
+{
+	if (separator_pos == 0)
+		return 0;
+	return (s[separator_pos - 1] == ' ');
+}
+
+static int space_exists_after_separator(const char *s, ssize_t separator_pos)
+{
+	if (separator_pos <= 0)
+		return 0;
+	return (s[separator_pos + 1] == ' ');
+}
+
+static int space_exists_around_separator(const char *s, ssize_t separator_pos)
+{
+	return (space_exists_before_separator(s, separator_pos) ||
+		space_exists_after_separator(s, separator_pos));
 }
 
 /*
@@ -784,46 +803,73 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
 }
 
 /*
- * Obtain the key, value, and conf from the given trailer.
- *
- * The conf needs special handling. We first read hardcoded defaults, and
- * override them if we find a matching trailer configuration in the config.
- *
- * separator_pos must not be 0, since the key cannot be an empty string.
- *
- * If separator_pos is -1, interpret the whole trailer as a key.
+ * Parse a string that could have a trailer in it into the raw, key, and val
+ * components.
  */
-static void parse_trailer(const char *trailer_string,
-			  ssize_t separator_pos,
-			  struct strbuf *key, struct strbuf *val)
+enum trailer_parse_result parse_trailer(const char *trailer_string,
+					const char *separators,
+					struct strbuf *raw,
+					struct strbuf *key,
+					struct strbuf *val)
 {
-	if (separator_pos != -1) {
+	ssize_t separator_pos = find_separator(trailer_string, separators);
+	enum trailer_parse_result result;
+	struct strbuf raw_trimmed = STRBUF_INIT;
+
+	strbuf_addstr(raw, trailer_string);
+	strbuf_addstr(&raw_trimmed, trailer_string);
+	strbuf_trim(&raw_trimmed);
+
+	if (!raw->len)
+		result = PARSE_NOT_TRAILER_EMPTY_LINE;
+	else if (!raw_trimmed.len)
+		result = PARSE_NOT_TRAILER_EMPTY_LINE;
+	else if (separator_pos == -1)
+		if (raw->buf[0] == comment_line_char)
+			result = PARSE_NOT_TRAILER_COMMENT_LINE;
+		else if (isspace(raw->buf[0]))
+			result = PARSE_NOT_TRAILER_LEADING_SPACE;
+		else
+			result = PARSE_NOT_TRAILER_NO_SEPARATOR;
+	else if (separator_pos == 0)
+		result = PARSE_FOUND_EMPTY_KEY;
+	else
+		result = PARSE_FOUND_REGULAR_KEY;
+
+	switch (result) {
+	case PARSE_FOUND_REGULAR_KEY:
 		strbuf_add(key, trailer_string, separator_pos);
 		strbuf_trim(key);
+		/*
+		 * If the parsed line is like "Reviewed-by: ", this is still a
+		 * key+value trailer, although with " " as the value.
+		 */
 		strbuf_addstr(val, trailer_string + separator_pos + 1);
 		strbuf_trim(val);
-	} else {
-		strbuf_addstr(key, trailer_string);
-		strbuf_trim(key);
+		break;
+	case PARSE_FOUND_EMPTY_KEY:
+		strbuf_addstr(val, trailer_string + separator_pos + 1);
+		strbuf_trim(val);
+		break;
+	default:
+		break;
 	}
+
+	return result;
 }
 
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key, struct strbuf *val,
-				  const struct trailer_conf **conf)
+void apply_matching_injector_from_config(struct strbuf *key,
+					 const struct trailer_conf **conf,
+					 struct trailer_subsystem_conf *tsc)
 {
+	struct list_head *pos;
 	struct trailer_injector *injector;
 	size_t key_len;
-	struct list_head *pos;
 
-	parse_trailer(trailer_string, separator_pos, key, val);
+	/* Prepare defaults in case there's nothing in the config. */
+	*conf = &tsc->conf;
 
-	/* Lookup if the key matches something in the config */
 	key_len = key_len_without_separator(key->buf, key->len);
-	if (conf)
-		*conf = &tsc->conf;
 	list_for_each(pos, tsc->injectors) {
 		injector = list_entry(pos, struct trailer_injector, list);
 		if (key_matches_injector(key->buf, injector, key_len)) {
@@ -831,6 +877,12 @@ void parse_trailer_against_config(const char *trailer_string,
 			if (conf)
 				*conf = &injector->conf;
 			strbuf_addstr(key, key_or_key_alias_from(injector, key_buf));
+			/*
+			 * Trim any trailing spaces at the end of a key. This
+			 * can happen with a setting like 'trailer.review.key =
+			 * "Reviewed-by: "' with a trailing space.
+			 */
+			strbuf_rtrim(key);
 			free(key_buf);
 			break;
 		}
@@ -1088,76 +1140,139 @@ static void unfold_value(struct strbuf *val)
 	strbuf_release(&out);
 }
 
+/*
+ * Formatting the separator depends on the key, because the key may be
+ * configured to come with its own separator.
+ */
+static void format_key_value_separator(struct strbuf *key,
+				       const struct trailer_processing_options *opts,
+				       struct trailer_subsystem_conf *tsc,
+				       struct strbuf *out)
+{
+	ssize_t separator_pos;
+	char c;
+
+	if (opts->value_only)
+		return;
+	/*
+	 * Print separator (between key and value) and space.
+	 */
+	if (opts->key_value_separator) {
+		strbuf_addbuf(out, opts->key_value_separator);
+		return;
+	}
+
+	/*
+	 * Print the default separator and space.
+	 */
+	c = last_non_space_char(key->buf);
+	if (!strchr(tsc->separators, c))
+		strbuf_addch(out, tsc->separators[0]);
+
+	separator_pos = find_separator(key->buf, tsc->separators);
+	if (!space_exists_around_separator(key->buf, separator_pos))
+		strbuf_addch(out, ' ');
+}
+
+static void format_non_trailer(struct trailer *trailer,
+			       const struct trailer_processing_options *opts,
+			       struct strbuf *out)
+{
+	struct strbuf raw = STRBUF_INIT;
+
+	if (opts->only_trailers)
+		return;
+	/*
+	 * If this trailer was injected, then the raw field is
+	 * NULL because the injector only populates the key and
+	 * value.
+	 */
+	if (trailer->raw)
+		strbuf_addstr(&raw, trailer->raw);
+
+	if (opts->separator) {
+		strbuf_addbuf(out, opts->separator);
+		strbuf_rtrim(&raw);
+	}
+
+	strbuf_addstr(out, raw.buf);
+}
+
+static void format_trailer(struct trailer *trailer,
+			   const struct trailer_processing_options *opts,
+			   struct trailer_subsystem_conf *tsc,
+			   int need_separator_before_trailer,
+			   struct strbuf *out)
+{
+	struct strbuf key = STRBUF_INIT;
+	struct strbuf val = STRBUF_INIT;
+
+	strbuf_addstr(&key, trailer->key);
+	strbuf_addstr(&val, trailer->value);
+
+	/* This is a non-trailer line. */
+	if (!key.len) {
+		format_non_trailer(trailer, opts, out);
+		return;
+	}
+
+	/*
+	 * Skip key/value pairs where the value was empty. This can happen from
+	 * trailers specified without a separator, like `--trailer
+	 * "Reviewed-by"` (no corresponding value).
+	 */
+	if (opts->trim_empty && !val.len)
+		return;
+
+	/*
+	 * Likewise, skip over keys that fail to match a filter if we specify
+	 * one.
+	 */
+	if (opts->filter && !opts->filter(&key, opts->filter_data))
+		return;
+
+	/*
+	 * Print a separator *before* the trailer. Useful for printing all
+	 * trailers into the same line.
+	 */
+	if (opts->separator && need_separator_before_trailer)
+		strbuf_addbuf(out, opts->separator);
+
+	/* Print the key. */
+	if (!opts->value_only)
+		strbuf_addstr(out, key.buf);
+
+	if (!opts->key_only) {
+		/*
+		 * Print the separator (and optional space) between the key and
+		 * value.
+		 */
+		format_key_value_separator(&key, opts, tsc, out);
+
+		/* Print the value. */
+		strbuf_addstr(out, val.buf);
+	}
+
+	/*
+	 * If there was no separator before the trailer (special case when
+	 * opts->separator is set), print final newline.
+	 */
+	if (!opts->separator)
+		strbuf_addch(out, '\n');
+}
+
 void format_trailers(struct trailer_block *trailer_block,
 		     const struct trailer_processing_options *opts,
 		     struct trailer_subsystem_conf *tsc,
 		     struct strbuf *out)
 {
 	struct list_head *pos;
-	struct trailer *trailer;
-	int need_separator = 0;
+	int i = 0;
 
 	list_for_each(pos, trailer_block->trailers) {
-		trailer = list_entry(pos, struct trailer, list);
-		if (trailer->key) {
-			char c;
-
-			struct strbuf key = STRBUF_INIT;
-			struct strbuf val = STRBUF_INIT;
-			strbuf_addstr(&key, trailer->key);
-			strbuf_addstr(&val, trailer->value);
-
-			/*
-			 * Skip key/value pairs where the value was empty. This
-			 * can happen from trailers specified without a
-			 * separator, like `--trailer "Reviewed-by"` (no
-			 * corresponding value).
-			 */
-			if (opts->trim_empty && !strlen(trailer->value))
-				continue;
-
-			if (!opts->filter || opts->filter(&key, opts->filter_data)) {
-				if (opts->unfold)
-					unfold_value(&val);
-
-				if (opts->separator && need_separator)
-					strbuf_addbuf(out, opts->separator);
-				if (!opts->value_only)
-					strbuf_addbuf(out, &key);
-				if (!opts->key_only && !opts->value_only) {
-					if (opts->key_value_separator)
-						strbuf_addbuf(out, opts->key_value_separator);
-					else {
-						c = last_non_space_char(key.buf);
-						if (c) {
-							if (!strchr(tsc->separators, c))
-								strbuf_addf(out, "%c ", tsc->separators[0]);
-						}
-					}
-				}
-				if (!opts->key_only)
-					strbuf_addbuf(out, &val);
-				if (!opts->separator)
-					strbuf_addch(out, '\n');
-
-				need_separator = 1;
-			}
-
-			strbuf_release(&key);
-			strbuf_release(&val);
-		} else if (!opts->only_trailers) {
-			if (opts->separator && need_separator) {
-				strbuf_addbuf(out, opts->separator);
-			}
-			strbuf_addstr(out, trailer->value);
-			if (opts->separator)
-				strbuf_rtrim(out);
-			else
-				strbuf_addch(out, '\n');
-
-			need_separator = 1;
-		}
-
+		format_trailer(list_entry(pos, struct trailer, list),
+			       opts, tsc, i, out);
+		i++;
 	}
 }
 
@@ -1175,14 +1290,9 @@ struct trailer_block *parse_trailer_block(const char *str,
 {
 	struct trailer_block *trailer_block = trailer_block_new();
 	size_t end_of_log_message = 0, trailer_block_start = 0;
-	struct strbuf **trailer_block_lines, **ptr;
-	char **trailer_strings = NULL;
-	size_t nr = 0, alloc = 0;
-	char **last = NULL;
-	struct trailer *trailer;
-	int separator_pos;
-	size_t i;
-	char *trailer_string;
+	struct strbuf **trailer_block_lines, **cur;
+	struct trailer *last_trailer = NULL;
+	enum trailer_parse_result result;
 
 	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
 	trailer_block_start = find_trailer_block_start(str, end_of_log_message, tsc);
@@ -1192,69 +1302,69 @@ struct trailer_block *parse_trailer_block(const char *str,
 					       '\n',
 					       0);
 	/*
-	 * Grow trailer_strings array. Notably, this keeps non-trailers lines,
-	 * but unfolds folded lines to be on a single line.
-	 */
-	for (ptr = trailer_block_lines; *ptr; ptr++) {
-		/*
-		 * Grow the last-parsed trailer if this line is a continuation
-		 * (starts with a space).
-		 */
-		if (last && isspace((*ptr)->buf[0])) {
-			struct strbuf sb = STRBUF_INIT;
-			strbuf_attach(&sb, *last, strlen(*last), strlen(*last));
-			strbuf_addbuf(&sb, *ptr);
-			*last = strbuf_detach(&sb, NULL);
-			continue;
-		}
-		ALLOC_GROW(trailer_strings, nr + 1, alloc);
-		trailer_strings[nr] = strbuf_detach(*ptr, NULL);
-		last = find_separator(trailer_strings[nr], tsc->separators) >= 1
-			? &trailer_strings[nr]
-			: NULL;
-		nr++;
-	}
-
-	/*
 	 * Parse all lines in the trailer block. Note that we treat both trailer
 	 * strings and non-trailer strings as "trailers", by creating a
 	 * "trailer" for each one.
 	 */
-	for (i = 0; i < nr; i++) {
+	for (cur = trailer_block_lines; *cur; cur++) {
 		struct strbuf raw = STRBUF_INIT;
 		struct strbuf key = STRBUF_INIT;
 		struct strbuf val = STRBUF_INIT;
-		trailer_string = trailer_strings[i];
-		if (trailer_string[0] == comment_line_char)
+
+		result = parse_trailer((*cur)->buf, tsc->separators,
+				       &raw, &key, &val);
+
+		if (result == PARSE_NOT_TRAILER_EMPTY_LINE)
 			continue;
-		strbuf_addstr(&raw, trailer_string);
-		separator_pos = find_separator(trailer_string, tsc->separators);
-		if (separator_pos >= 1) {
-			parse_trailer(trailer_string, separator_pos, &key, &val);
-			if (opts->unfold)
-				unfold_value(&val);
-			trailer = trailer_from(strbuf_detach(&raw, NULL),
-					       strbuf_detach(&key, NULL),
-					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailer_block->trailers);
-		} else if (!opts->only_trailers) {
-			strbuf_addstr(&val, trailer_string);
-			strbuf_strip_suffix(&val, "\n");
-			trailer = trailer_from(strbuf_detach(&raw, NULL),
-					       NULL,
-					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailer_block->trailers);
+
+		if (result == PARSE_NOT_TRAILER_COMMENT_LINE)
+			continue;
+
+		/*
+		 * Grow the last-parsed trailer if this line is a continuation
+		 * (starts with a space).
+		 */
+		if (result == PARSE_NOT_TRAILER_LEADING_SPACE && last_trailer) {
+			struct strbuf last_val = STRBUF_INIT;
+			strbuf_attach(&last_val, last_trailer->value,
+				strlen(last_trailer->value),
+				strlen(last_trailer->value));
+
+			/*
+			 * The line may not have been trimmed if there was no
+			 * separator in it (see parse_trailer(), which only
+			 * trims if a separator was found). So do a manual trim.
+			 */
+			strbuf_rtrim(*cur);
+
+			if (opts->unfold) {
+				strbuf_rtrim(&last_val);
+				strbuf_ltrim(*cur);
+				if (last_val.len && (*cur)->len)
+					strbuf_addch(&last_val, ' ');
+			}
+
+			if ((*cur)->len) {
+				if (!opts->unfold)
+					strbuf_addch(&last_val, '\n');
+				strbuf_addbuf(&last_val, *cur);
+				last_trailer->value = strbuf_detach(&last_val, NULL);
+				continue;
+			}
 		}
+
+		last_trailer = trailer_from(strbuf_detach(&raw, NULL),
+					    strbuf_detach(&key, NULL),
+					    strbuf_detach(&val, NULL));
+		list_add_tail(&last_trailer->list, trailer_block->trailers);
 	}
-	for (i = 0; i < trailer_block->trailer_nr; i++)
-		free(trailer_strings[i]);
+
 	strbuf_list_free(trailer_block_lines);
 
 	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,
 									trailer_block_start);
 	trailer_block->start = trailer_block_start;
 	trailer_block->end = end_of_log_message;
-	trailer_block->trailer_nr = nr;
 
 	return trailer_block;
 }

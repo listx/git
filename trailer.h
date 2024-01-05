@@ -68,14 +68,39 @@ void get_independent_trailer_injectors_from(struct trailer_subsystem_conf *tsc,
 void apply_trailer_injectors(struct list_head *injectors,
 			     struct trailer_block *trailer_block);
 
+
+/*
+ * These are the three possible cases of trying to parse a string as a key/val
+ * pair for trailers.
+ */
+enum trailer_parse_result {
+	/*
+	 * Examples:
+	 * - "this is not a trailer" (no separator)
+	 * - "  Foo::Bar()" (leading character is a space)
+	 * - "# a comment" (leading character is a comment)
+	 */
+	PARSE_NOT_TRAILER_EMPTY_LINE,
+	PARSE_NOT_TRAILER_LEADING_SPACE,
+	PARSE_NOT_TRAILER_COMMENT_LINE,
+	PARSE_NOT_TRAILER_NO_SEPARATOR,
+	/* Example: ": path" (separator found, but empty key) */
+	PARSE_FOUND_EMPTY_KEY,
+	/* Example: "happy: path" (separator found; non-empty key) */
+	PARSE_FOUND_REGULAR_KEY
+};
+
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key,
-				  struct strbuf *val,
-				  const struct trailer_conf **conf);
+enum trailer_parse_result parse_trailer(const char *trailer_string,
+					const char *separators,
+					struct strbuf *raw,
+					struct strbuf *key,
+					struct strbuf *val);
+
+void apply_matching_injector_from_config(struct strbuf *key,
+					 const struct trailer_conf **conf,
+					 struct trailer_subsystem_conf *tsc);
 
 struct trailer_block *parse_trailer_block(const char *str,
 					  const struct trailer_processing_options *opts,

@@ -1026,7 +1026,7 @@ test_expect_success 'using "where = before" for a token in the middle of the mes
 		Fixes: Z
 		Acked-by: Z
 		Acked-by= Peff
-		Reviewed-by:Johan
+		Reviewed-by: Johan
 		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
@@ -1047,7 +1047,7 @@ test_expect_success 'using "where = before" and --trim-empty' '
 		Bug #46
 		Bug #42
 		Acked-by= Peff
-		Reviewed-by:Johan
+		Reviewed-by: Johan
 	EOF
 	git interpret-trailers --trim-empty --trailer "ack: Peff" \
 		--trailer "bug: 42" --trailer "review: Johan" \
@@ -1306,7 +1306,7 @@ test_expect_success 'overriding configuration with "--if-exists replace"' '
 		Bug #42
 		Fixes: 22
 		Acked-by: Z
-		Reviewed-by:
+		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
 	git interpret-trailers --if-exists replace --trailer "review:" \

@@ -71,7 +71,7 @@ static int option_parse_trailer_injector(const struct option *opt,
 	struct strbuf key = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 	const struct trailer_conf *conf;
-	struct trailer_conf *conf_current = new_trailer_conf();
+	struct trailer_conf *conf_current;
 	ssize_t separator_pos;
 
 	if (unset) {
@@ -85,6 +85,7 @@ static int option_parse_trailer_injector(const struct option *opt,
 	separator_pos = find_separator(arg, cl_separators);
 	if (separator_pos) {
 		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, &conf);
+		conf_current = new_trailer_conf();
 		duplicate_conf(conf_current, conf);
 
 		/*
@@ -103,16 +104,9 @@ static int option_parse_trailer_injector(const struct option *opt,
 		add_trailer_injector(strbuf_detach(&key, NULL),
 				     strbuf_detach(&val, NULL),
 				     conf_current, injectors);
-	} else {
-		struct strbuf sb = STRBUF_INIT;
-		strbuf_addstr(&sb, arg);
-		strbuf_trim(&sb);
-		error(_("empty key in --trailer argument '%.*s'"),
-			(int) sb.len, sb.buf);
-		strbuf_release(&sb);
-	}
-
-	free(conf_current);
+		free(conf_current);
+	} else
+		error(_("ignoring --trailer argument '%s' with empty key"), arg);
 
 	return 0;
 }

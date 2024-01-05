@@ -961,15 +961,6 @@ void parse_trailer_against_config(const char *trailer_string,
 	}
 }
 
-static struct trailer *trailer_from(char *raw, char *key, char *val)
-{
-	struct trailer *trailer = xcalloc(1, sizeof(*trailer));
-	trailer->raw = raw;
-	trailer->key = key;
-	trailer->value = val;
-	return trailer;
-}
-
 void add_trailer_injector(char *key, char *val, const struct trailer_conf *conf,
 			  struct list_head *injectors)
 {
@@ -1299,14 +1290,9 @@ struct trailer_block *parse_trailer_block(const char *str,
 {
 	struct trailer_block *trailer_block = trailer_block_new();
 	size_t end_of_log_message = 0, trailer_block_start = 0;
-	struct strbuf **trailer_block_lines, **ptr;
-	char **trailer_strings = NULL;
-	size_t nr = 0, alloc = 0;
-	char **last = NULL;
-	struct trailer *trailer;
-	int separator_pos;
-	size_t i;
-	char *trailer_string;
+	struct strbuf **trailer_block_lines, **cur;
+	struct trailer *last_trailer = NULL;
+	struct trailer *cur_trailer = NULL;
 
 	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
 	trailer_block_start = find_trailer_block_start(str, end_of_log_message, tsc);
@@ -1316,64 +1302,62 @@ struct trailer_block *parse_trailer_block(const char *str,
 					       '\n',
 					       0);
 	/*
-	 * Grow trailer_strings array. Notably, this keeps non-trailers lines,
-	 * but unfolds folded lines to be on a single line.
-	 */
-	for (ptr = trailer_block_lines; *ptr; ptr++) {
-		/*
-		 * Grow the last-parsed trailer if this line is a continuation
-		 * (starts with a space).
-		 */
-		if (last && isspace((*ptr)->buf[0])) {
-			struct strbuf sb = STRBUF_INIT;
-			strbuf_attach(&sb, *last, strlen(*last), strlen(*last));
-			strbuf_addbuf(&sb, *ptr);
-			*last = strbuf_detach(&sb, NULL);
-			continue;
-		}
-		ALLOC_GROW(trailer_strings, nr + 1, alloc);
-		trailer_strings[nr] = strbuf_detach(*ptr, NULL);
-		last = find_separator(trailer_strings[nr], tsc->separators) >= 1
-			? &trailer_strings[nr]
-			: NULL;
-		nr++;
-	}
-
-	/*
 	 * Parse all lines in the trailer block. Note that we treat both trailer
 	 * strings and non-trailer strings as "trailers", by creating a
 	 * "trailer" for each one.
 	 */
-	for (i = 0; i < nr; i++) {
-		struct strbuf raw = STRBUF_INIT;
-		struct strbuf key = STRBUF_INIT;
-		struct strbuf val = STRBUF_INIT;
-		trailer_string = trailer_strings[i];
-		if (trailer_string[0] == comment_line_char)
+	for (cur = trailer_block_lines; *cur; cur++) {
+		cur_trailer = parse_trailer_v2((*cur)->buf, tsc->separators, 1);
+
+		if (cur_trailer->parse_result == TRAILER_EMPTY_LINE) {
+			free_trailer(cur_trailer);
 			continue;
-		strbuf_addstr(&raw, trailer_string);
-		separator_pos = find_separator(trailer_string, tsc->separators);
-		if (separator_pos >= 1) {
-			parse_trailer(trailer_string, separator_pos, &key, &val);
-			if (opts->unfold)
-				unfold_value(&val);
-			trailer = trailer_from(strbuf_detach(&raw, NULL),
-					       strbuf_detach(&key, NULL),
-					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailer_block->trailers);
-		} else if (!opts->only_trailers) {
-			strbuf_addstr(&val, trailer_string);
-			strbuf_strip_suffix(&val, "\n");
-			trailer = trailer_from(strbuf_detach(&raw, NULL),
-					       NULL,
-					       strbuf_detach(&val, NULL));
-			list_add_tail(&trailer->list, trailer_block->trailers);
 		}
+
+		if (cur_trailer->parse_result == TRAILER_COMMENT_LINE) {
+			free_trailer(cur_trailer);
+			continue;
+		}
+
+		/*
+		 * Grow the last-parsed trailer if this line is a continuation
+		 * (starts with a space).
+		 */
+		if (cur_trailer->parse_result == TRAILER_CONTINUATION_LINE && last_trailer) {
+			struct strbuf last_val = STRBUF_INIT;
+			strbuf_attach(&last_val, last_trailer->value,
+				strlen(last_trailer->value),
+				strlen(last_trailer->value));
+
+			/*
+			 * The line may not have been trimmed if there was no
+			 * separator in it (see parse_trailer(), which only
+			 * trims if a separator was found). So do a manual trim.
+			 */
+			strbuf_rtrim(*cur);
+
+			// FIXME: Consider avoiding mutations during parsing,
+			// (only do unfolding during formatting).
+			if (opts->unfold) {
+				strbuf_rtrim(&last_val);
+				strbuf_ltrim(*cur);
+				if (last_val.len && (*cur)->len)
+					strbuf_addch(&last_val, ' ');
+			}
+
+			if ((*cur)->len) {
+				if (!opts->unfold)
+					strbuf_addch(&last_val, '\n');
+				strbuf_addbuf(&last_val, *cur);
+				last_trailer->value = strbuf_detach(&last_val, NULL);
+				continue;
+			}
+		}
+
+		list_add_tail(&cur_trailer->list, trailer_block->trailers);
+		last_trailer = cur_trailer;
 	}
 
-	for (i = 0; i < nr; i++)
-		free(trailer_strings[i]);
-	free(trailer_strings);
 	strbuf_list_free(trailer_block_lines);
 
 	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,

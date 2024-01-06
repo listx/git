@@ -1150,33 +1150,6 @@ static int ends_with_blank_line(const char *buf, size_t len)
 	return is_blank_line(buf + ll);
 }
 
-static void unfold_value(struct strbuf *val)
-{
-	struct strbuf out = STRBUF_INIT;
-	size_t i;
-
-	strbuf_grow(&out, val->len);
-	i = 0;
-	while (i < val->len) {
-		char c = val->buf[i++];
-		if (c == '\n') {
-			/* Collapse continuation down to a single space. */
-			while (i < val->len && isspace(val->buf[i]))
-				i++;
-			strbuf_addch(&out, ' ');
-		} else {
-			strbuf_addch(&out, c);
-		}
-	}
-
-	/* Empty lines may have left us with whitespace cruft at the edges */
-	strbuf_trim(&out);
-
-	/* output goes back to val as if we modified it in-place */
-	strbuf_swap(&out, val);
-	strbuf_release(&out);
-}
-
 static char last_non_space_char(const char *s)
 {
 	int i;
@@ -1326,7 +1299,7 @@ static void format_trailer(struct trailer *trailer,
 		strbuf_addch(out, '\n');
 }
 
-static void format_trailers_v2(struct trailer_block *trailer_block,
+void format_trailers(struct trailer_block *trailer_block,
 		     const struct trailer_processing_options *opts,
 		     struct trailer_subsystem_conf *tsc,
 		     struct strbuf *out)
@@ -1338,79 +1311,6 @@ static void format_trailers_v2(struct trailer_block *trailer_block,
 		format_trailer(list_entry(pos, struct trailer, list),
 			       opts, tsc, need_trailer_separator, out);
 		need_trailer_separator = 1;
-	}
-}
-
-void format_trailers(struct trailer_block *trailer_block,
-		     const struct trailer_processing_options *opts,
-		     struct trailer_subsystem_conf *tsc,
-		     struct strbuf *out)
-{
-	struct list_head *pos;
-	struct trailer *trailer;
-	int need_separator = 0;
-
-	list_for_each(pos, trailer_block->trailers) {
-		trailer = list_entry(pos, struct trailer, list);
-		if (trailer->key) {
-			char c;
-
-			struct strbuf key = STRBUF_INIT;
-			struct strbuf val = STRBUF_INIT;
-			strbuf_addstr(&key, trailer->key);
-			strbuf_addstr(&val, trailer->value);
-
-			/*
-			 * Skip key/value pairs where the value was empty. This
-			 * can happen from trailers specified without a
-			 * separator, like `--trailer "Reviewed-by"` (no
-			 * corresponding value).
-			 */
-			if (opts->trim_empty && !strlen(trailer->value))
-				continue;
-
-			if (!opts->filter || opts->filter(&key, opts->filter_data)) {
-				if (opts->unfold)
-					unfold_value(&val);
-
-				if (opts->separator && need_separator)
-					strbuf_addbuf(out, opts->separator);
-				if (!opts->value_only)
-					strbuf_addbuf(out, &key);
-				if (!opts->key_only && !opts->value_only) {
-					if (opts->key_value_separator)
-						strbuf_addbuf(out, opts->key_value_separator);
-					else {
-						c = last_non_space_char(key.buf);
-						if (c) {
-							if (!strchr(tsc->separators, c))
-								strbuf_addf(out, "%c ", tsc->separators[0]);
-						}
-					}
-				}
-				if (!opts->key_only)
-					strbuf_addbuf(out, &val);
-				if (!opts->separator)
-					strbuf_addch(out, '\n');
-
-				need_separator = 1;
-			}
-
-			strbuf_release(&key);
-			strbuf_release(&val);
-		} else if (!opts->only_trailers) {
-			if (opts->separator && need_separator) {
-				strbuf_addbuf(out, opts->separator);
-			}
-			strbuf_addstr(out, trailer->value);
-			if (opts->separator)
-				strbuf_rtrim(out);
-			else
-				strbuf_addch(out, '\n');
-
-			need_separator = 1;
-		}
-
 	}
 }
 
@@ -1595,7 +1495,6 @@ int trailer_iter_advance(struct trailer_iter *iter)
 			strbuf_addstr(&iter->key, trailer->key);
 		strbuf_reset(&iter->val);
 		strbuf_addstr(&iter->val, trailer->value);
-		unfold_value(&iter->val);
 		iter->cur = iter->cur->next;
 		return 1;
 	}

@@ -90,8 +90,6 @@ enum trailer_parse_result {
 	PARSE_FOUND_REGULAR_KEY
 };
 
-ssize_t find_separator(const char *trailer_string, const char *separators);
-
 enum trailer_parse_result parse_trailer(const char *trailer_string,
 					const char *separators,
 					struct strbuf *raw,

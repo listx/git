@@ -784,7 +784,7 @@ static int key_matches_injector(const char *key, struct trailer_injector *inject
  * distinguished from the non-well-formed-line case (in which this function
  * returns -1) because some callers of this function need such a distinction.
  */
-ssize_t find_separator(const char *trailer_string, const char *separators)
+static ssize_t find_separator(const char *trailer_string, const char *separators)
 {
 	int whitespace_found = 0;
 	const char *c;

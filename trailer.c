@@ -855,6 +855,8 @@ enum trailer_parse_result parse_trailer(const char *trailer_string,
 		break;
 	}
 
+	strbuf_release(&raw_trimmed);
+
 	return result;
 }
 

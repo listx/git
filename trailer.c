@@ -1170,7 +1170,7 @@ static void format_non_trailer(struct trailer *trailer,
 		strbuf_rtrim(&raw);
 	}
 
-	strbuf_addstr(out, raw.buf);
+	strbuf_addbuf(out, &raw);
 }
 
 static void format_trailer(struct trailer *trailer,
@@ -1215,7 +1215,7 @@ static void format_trailer(struct trailer *trailer,
 
 	/* Print the key. */
 	if (!opts->value_only)
-		strbuf_addstr(out, key.buf);
+		strbuf_addbuf(out, &key);
 
 	if (!opts->key_only) {
 		/*
@@ -1225,7 +1225,7 @@ static void format_trailer(struct trailer *trailer,
 		format_key_value_separator(&key, opts, tsc, out);
 
 		/* Print the value. */
-		strbuf_addstr(out, val.buf);
+		strbuf_addbuf(out, &val);
 	}
 
 	/*

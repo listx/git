@@ -1344,6 +1344,134 @@ static void unfold_value(struct strbuf *val)
 	strbuf_release(&out);
 }
 
+/*
+ * Formatting the separator depends on the key, because the key may be
+ * configured to come with its own separator.
+ */
+static void format_separator_and_spaces(const struct trailer *trailer,
+					const struct trailer_processing_options *opts,
+					struct strbuf *out)
+{
+	if (opts->value_only)
+		return;
+	/*
+	 * Print key_value_separator. This setting overrides the usual
+	 * separator, but also any space_{before,after}_separator settings.
+	 */
+	if (opts->key_value_separator) {
+		strbuf_addbuf(out, opts->key_value_separator);
+		return;
+	}
+
+	/*
+	 * Print the separator and any spaces around it.
+	 */
+
+	if (trailer->space_before_separator)
+		strbuf_addch(out, ' ');
+
+	strbuf_addch(out, trailer->separator);
+
+	if (trailer->space_after_separator)
+		strbuf_addch(out, ' ');
+}
+
+static void format_non_trailer(const struct trailer *trailer,
+			       const struct trailer_processing_options *opts,
+			       struct strbuf *out)
+{
+	struct strbuf raw = STRBUF_INIT;
+
+	if (opts->only_trailers)
+		return;
+
+	strbuf_addstr(&raw, trailer->raw);
+
+	if (opts->separator) {
+		strbuf_addbuf(out, opts->separator);
+		strbuf_rtrim(&raw);
+	}
+
+	strbuf_addbuf(out, &raw);
+}
+
+static void format_trailer(const struct trailer *trailer,
+			   const struct trailer_processing_options *opts,
+			   int need_trailer_separator,
+			   struct strbuf *out)
+{
+	struct strbuf key = STRBUF_INIT;
+	struct strbuf val = STRBUF_INIT;
+
+	strbuf_addstr(&key, trailer->key);
+	strbuf_addstr(&val, trailer->value);
+
+	/* This is a non-trailer line. */
+	if (trailer->type != TRAILER_OK) {
+		format_non_trailer(trailer, opts, out);
+		return;
+	}
+
+	/*
+	 * Skip key/value pairs where the value was empty. This can happen from
+	 * trailers specified without a separator, like `--trailer
+	 * "Reviewed-by"` (no corresponding value) if there's no matching
+	 * configuration option for "Reviewed-by" which knows how to populate
+	 * the value (by running a command).
+	 */
+	if (opts->trim_empty && !val.len)
+		return;
+
+	/*
+	 * Likewise, skip over keys that fail to match a filter if we specify
+	 * one.
+	 */
+	if (opts->filter && !opts->filter(&key, opts->filter_data))
+		return;
+
+	/*
+	 * Print a separator *before* the trailer. Useful for printing all
+	 * trailers into the same line.
+	 */
+	if (opts->separator && need_trailer_separator)
+		strbuf_addbuf(out, opts->separator);
+
+	/* Print the key. */
+	if (!opts->value_only)
+		strbuf_addbuf(out, &key);
+
+	if (!opts->key_only) {
+		/*
+		 * Print the separator (and optional spaces) around the
+		 * separator.
+		 */
+		format_separator_and_spaces(trailer, opts, out);
+
+		/* Print the value. */
+		if (opts->unfold)
+			unfold_value(&val);
+
+		strbuf_addbuf(out, &val);
+	}
+
+	if (!opts->separator)
+		strbuf_addch(out, '\n');
+}
+
+static void format_trailer_block(const struct trailer_processing_options *opts,
+				 const struct trailer_block *trailer_block,
+				 struct strbuf *out)
+{
+	struct list_head *pos;
+	int need_trailer_separator = 0;
+
+	list_for_each(pos, trailer_block->trailers) {
+		format_trailer(list_entry(pos, struct trailer, list),
+			       opts, need_trailer_separator, out);
+		need_trailer_separator = 1;
+	}
+}
+
 static struct trailer_block *trailer_block_new(void)
 {
 	struct trailer_block *trailer_block = xcalloc(1, sizeof(*trailer_block));

@@ -746,11 +746,11 @@ static int git_trailer_config_by_key_alias(const char *opt, const char *setting,
 		 *
 		 *     trailer.foo.key = "foo-bar: "
 		 *
-		 * can also be parsed as a "trailer" using the parse_trailer_v2()
+		 * can also be parsed as a "trailer" using the parse_trailer()
 		 * helper, because that function understands all the nuances of
 		 * parsing text that looks like a trailer.
 		 */
-		trailer = parse_trailer_v2(setting, tsc->separators, 0);
+		trailer = parse_trailer(setting, tsc->separators, 0);
 
 		if (trailer->type == TRAILER_OK) {
 			conf->key = xstrdup(trailer->key);
@@ -879,31 +879,6 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
 	return -1;
 }
 
-/*
- * Obtain the key, value, and conf from the given trailer.
- *
- * The conf needs special handling. We first read hardcoded defaults, and
- * override them if we find a matching trailer configuration.
- *
- * separator_pos must not be 0, since the key cannot be an empty string.
- *
- * If separator_pos is -1, interpret the whole trailer as a key.
- */
-static void parse_trailer(const char *trailer_string,
-			  ssize_t separator_pos,
-			  struct strbuf *key, struct strbuf *val)
-{
-	if (separator_pos != -1) {
-		strbuf_add(key, trailer_string, separator_pos);
-		strbuf_trim(key);
-		strbuf_addstr(val, trailer_string + separator_pos + 1);
-		strbuf_trim(val);
-	} else {
-		strbuf_addstr(key, trailer_string);
-		strbuf_trim(key);
-	}
-}
-
 static int skip_whitespace(const char **c)
 {
 	int whitespace_found = 0;
@@ -931,9 +906,9 @@ static int skip_whitespace(const char **c)
  * Technically values may contain newlines; we only strip trailing newlines from
  * values (if a value was found).
  */
-struct trailer *parse_trailer_v2(const char *s,
-				 const char *separators,
-				 int leading_whitespace_ends_parse)
+struct trailer *parse_trailer(const char *s,
+			      const char *separators,
+			      int leading_whitespace_ends_parse)
 {
 	const char *c = s;
 	const char *offset;
@@ -1053,6 +1028,11 @@ struct trailer *parse_trailer_v2(const char *s,
 	}
 
 	return trailer;
+}
+
+enum trailer_type get_trailer_type(struct trailer *trailer)
+{
+	return trailer->type;
 }
 
 struct trailer_conf *get_matching_trailer_conf(const struct trailer_subsystem_conf *tsc,
@@ -1463,7 +1443,7 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 	 * "trailer" for each one.
 	 */
 	for (raw = trailer_block_lines; *raw; raw++) {
-		cur_trailer = parse_trailer_v2((*raw)->buf, opts->tsc->separators, 1);
+		cur_trailer = parse_trailer((*raw)->buf, opts->tsc->separators, 1);
 
 		/*
 		 * If there's a blank line, it means we're at the end of a
@@ -1493,7 +1473,7 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 			/*
 			 * We have to manually add a newline (because any
 			 * newline in the last trailer's value would have been
-			 * trimmed inside parse_trailer_v2()). And, because we are
+			 * trimmed inside parse_trailer()). And, because we are
 			 * appending the raw text to the last trailer's value,
 			 * we have to trim this ourselves (because we are
 			 * bypassing parse_trailer()).

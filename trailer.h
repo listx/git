@@ -148,9 +148,11 @@ enum trailer_type {
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
-struct trailer *parse_trailer_v2(const char *s,
+struct trailer *parse_trailer(const char *s,
 			      const char *separators,
 			      int leading_whitespace_is_continuation);
+
+enum trailer_type get_trailer_type(struct trailer *);
 
 struct trailer_conf *get_matching_trailer_conf(const struct trailer_subsystem_conf *tsc,
 					       const struct trailer *trailer);

@@ -109,12 +109,15 @@ const char *trailer_iter_val(struct trailer_iter *iter)
 
 struct trailer {
 	struct list_head list;
+
 	char *raw;
-	/*
-	 * If this is not a trailer line, the line is stored in value
-	 * (excluding the terminating newline) and key is NULL.
-	 */
+
 	char *key;
+
+	int space_before_separator;
+	char separator;
+	int space_after_separator;
+
 	char *value;
 };
 
@@ -922,6 +925,78 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
 		break;
 	}
 	return -1;
+}
+
+/*
+ * Parse a string that could have a trailer in it.
+ */
+static enum trailer_parse_result parse_trailer_v2(const char *trailer_string,
+					const char *separators,
+					struct strbuf *raw,
+					struct strbuf *key,
+					int *space_before_separator,
+					char *separator,
+					int *space_after_separator,
+					struct strbuf *val)
+{
+	ssize_t separator_pos = find_separator(trailer_string, separators);
+	struct strbuf raw_trimmed = STRBUF_INIT;
+	ssize_t i;
+	const char *c;
+
+	strbuf_addstr(raw, trailer_string);
+	strbuf_addstr(&raw_trimmed, trailer_string);
+	strbuf_trim(&raw_trimmed);
+
+	if (!raw->len || !raw_trimmed.len) {
+		strbuf_release(&raw_trimmed);
+		return TRAILER_PARSE_RESULT_EMPTY_LINE;
+	}
+	strbuf_release(&raw_trimmed);
+
+	if (separator_pos == -1) {
+		if (raw->buf[0] == comment_line_char) {
+			return TRAILER_PARSE_RESULT_COMMENT_LINE;
+		}
+
+		if (isspace(raw->buf[0])) {
+			return TRAILER_PARSE_RESULT_LEADING_SPACE;
+		}
+
+		return TRAILER_PARSE_RESULT_NO_SEPARATOR;
+	}
+
+	if (separator_pos == 0) {
+		return TRAILER_PARSE_RESULT_EMPTY_KEY;
+	}
+
+	/*
+	 * Parse the key.
+	 */
+	i = separator_pos;
+	while (i > 0 && isspace(trailer_string[i - 1]))
+		i--;
+	strbuf_add(key, trailer_string, i);
+
+	/*
+	 * Parse the separator. Remember if there was a space before/after the
+	 * separator.
+	 */
+	*separator = trailer_string[separator_pos];
+	if (i != separator_pos)
+		*space_before_separator = 1;
+	c = &trailer_string[separator_pos + 1];
+	if (c && isspace(*c))
+		*space_after_separator = 1;
+
+	/*
+	 * Parse the value (result may be empty, or have some non-space
+	 * characters).
+	 */
+	strbuf_addstr(val, trailer_string + separator_pos + 1);
+	strbuf_trim(val);
+
+	return TRAILER_PARSE_RESULT_OK;
 }
 
 /*

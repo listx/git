@@ -71,8 +71,9 @@ static int option_parse_trailer_injector(const struct option *opt,
 	struct strbuf key = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 	const struct trailer_conf *conf;
-	struct trailer_conf *conf_current = new_trailer_conf();
-	ssize_t separator_pos;
+	struct trailer_conf *conf_current;
+	struct trailer *trailer;
+	enum trailer_parse_result parse_result;
 
 	if (unset) {
 		free_trailer_injectors(injectors);
@@ -82,30 +83,42 @@ static int option_parse_trailer_injector(const struct option *opt,
 	if (!arg)
 		return -1;
 
-	separator_pos = find_separator(arg, cl_separators);
-	if (separator_pos) {
-		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, &conf);
-		duplicate_trailer_conf(conf_current, conf);
+	trailer = parse_trailer(arg, cl_separators, 0);
+	parse_result = get_trailer_parse_result(trailer);
 
-		/*
-		 * Override conf_current with settings specified via CLI flags.
-		 */
-		trailer_conf_set(where, if_exists, if_missing, conf_current);
-
-		add_trailer_injector(strbuf_detach(&key, NULL),
-				     strbuf_detach(&val, NULL),
-				     conf_current, injectors);
-	} else {
+	if (parse_result == TRAILER_EMPTY_KEY) {
 		struct strbuf sb = STRBUF_INIT;
 		strbuf_addstr(&sb, arg);
 		strbuf_trim(&sb);
 		error(_("empty key in --trailer argument '%.*s'"),
 			(int) sb.len, sb.buf);
 		strbuf_release(&sb);
+		return 0;
 	}
 
-	free(conf_current);
+	/*
+	 * If we failed to parse the argument as a key (example: "--trailer foo"
+	 * where there is no separator), then treat the entire arg ("foo") as a
+	 * key (key alias), to be looked up against configuration (search for
+	 * any trailer.foo.* configs).
+	 */
+	if (parse_result != TRAILER_OK)
+		strbuf_addstr(&key, arg);
 
+	/* Lookup if the key matches something in the config */
+	parse_trailer_against_config(&key, &conf, tsc);
+	conf_current = new_trailer_conf();
+	duplicate_trailer_conf(conf_current, conf);
+
+	/*
+	 * Override conf_current with settings specified via CLI flags.
+	 */
+	trailer_conf_set(where, if_exists, if_missing, conf_current);
+
+	add_trailer_injector(strbuf_detach(&key, NULL),
+			     strbuf_detach(&val, NULL),
+			     conf_current, injectors);
+	free(conf_current);
 	return 0;
 }
 

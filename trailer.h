@@ -109,12 +109,15 @@ enum trailer_parse_result {
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key,
-				  struct strbuf *val,
-				  const struct trailer_conf **conf);
+struct trailer *parse_trailer(const char *s,
+			      const char *separators,
+			      int leading_whitespace_is_continuation);
+
+enum trailer_parse_result get_trailer_parse_result(struct trailer *);
+
+void parse_trailer_against_config(struct strbuf *key,
+				  const struct trailer_conf **conf,
+				  struct trailer_subsystem_conf *tsc);
 
 struct trailer_block *parse_trailer_block(const char *str,
 					  const struct trailer_processing_options *opts,

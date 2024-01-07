@@ -652,9 +652,9 @@ static int skip_whitespace(const char **c)
 /*
  * Parse a string line for a key and separator.
  */
-static struct trailer *parse_trailer_v2(const char *s,
-					const char *separators,
-					int leading_whitespace_is_continuation)
+struct trailer *parse_trailer(const char *s,
+			      const char *separators,
+			      int leading_whitespace_is_continuation)
 {
 	const char *c = s;
 	const char *x;
@@ -748,6 +748,11 @@ static struct trailer *parse_trailer_v2(const char *s,
 		trailer->parse_result = TRAILER_OK;
 
 	return trailer;
+}
+
+enum trailer_parse_result get_trailer_parse_result(struct trailer *trailer)
+{
+	return trailer->parse_result;
 }
 
 static int git_trailer_config_by_key_alias(const char *conf_key, const char *value,
@@ -907,47 +912,19 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
 	return -1;
 }
 
-/*
- * Obtain the key, value, and conf from the given trailer.
- *
- * The conf needs special handling. We first read hardcoded defaults, and
- * override them if we find a matching trailer configuration in the config.
- *
- * separator_pos must not be 0, since the key cannot be an empty string.
- *
- * If separator_pos is -1, interpret the whole trailer as a key.
- */
-static void parse_trailer(const char *trailer_string,
-			  ssize_t separator_pos,
-			  struct strbuf *key, struct strbuf *val)
+void parse_trailer_against_config(struct strbuf *key,
+				  const struct trailer_conf **conf,
+				  struct trailer_subsystem_conf *tsc)
 {
-	if (separator_pos != -1) {
-		strbuf_add(key, trailer_string, separator_pos);
-		strbuf_trim(key);
-		strbuf_addstr(val, trailer_string + separator_pos + 1);
-		strbuf_trim(val);
-	} else {
-		strbuf_addstr(key, trailer_string);
-		strbuf_trim(key);
-	}
-}
-
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key, struct strbuf *val,
-				  const struct trailer_conf **conf)
-{
+	struct list_head *pos;
 	struct trailer_injector *injector;
 	size_t key_len;
-	struct list_head *pos;
 
-	parse_trailer(trailer_string, separator_pos, key, val);
+	/* Prepare defaults in case there's nothing in the config. */
+	*conf = &tsc->conf;
 
 	/* Lookup if the key matches something in the config */
 	key_len = key_len_without_separator(key->buf, key->len);
-	if (conf)
-		*conf = &tsc->conf;
 	list_for_each(pos, tsc->injectors) {
 		injector = list_entry(pos, struct trailer_injector, list);
 		if (key_matches_injector(key->buf, injector, key_len)) {
@@ -955,6 +932,12 @@ void parse_trailer_against_config(const char *trailer_string,
 			if (conf)
 				*conf = &injector->conf;
 			strbuf_addstr(key, key_or_key_alias_from(injector, key_buf));
+			/*
+			 * Trim any trailing spaces at the end of a key. This
+			 * can happen with a setting like 'trailer.review.key =
+			 * "Reviewed-by: "' with a trailing space.
+			 */
+			strbuf_rtrim(key);
 			free(key_buf);
 			break;
 		}
@@ -1307,7 +1290,7 @@ struct trailer_block *parse_trailer_block(const char *str,
 	 * "trailer" for each one.
 	 */
 	for (cur = trailer_block_lines; *cur; cur++) {
-		cur_trailer = parse_trailer_v2((*cur)->buf, tsc->separators, 1);
+		cur_trailer = parse_trailer((*cur)->buf, tsc->separators, 1);
 
 		if (cur_trailer->parse_result == TRAILER_EMPTY_LINE) {
 			free_trailer(cur_trailer);

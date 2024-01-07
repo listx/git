@@ -227,15 +227,6 @@ static void free_injector(struct trailer_injector *injector)
 	free(injector);
 }
 
-static char last_non_space_char(const char *s)
-{
-	int i;
-	for (i = strlen(s) - 1; i >= 0; i--)
-		if (!isspace(s[i]))
-			return s[i];
-	return '\0';
-}
-
 /*
  * Check if the injector's full key and val combination has not been seen yet in
  * either the existing trailer or the rest of trailers. If we want to add a
@@ -1184,6 +1175,170 @@ static void unfold_value(struct strbuf *val)
 	/* output goes back to val as if we modified it in-place */
 	strbuf_swap(&out, val);
 	strbuf_release(&out);
+}
+
+static char last_non_space_char(const char *s)
+{
+	int i;
+	for (i = strlen(s) - 1; i >= 0; i--)
+		if (!isspace(s[i]))
+			return s[i];
+	return '\0';
+}
+
+static int space_exists_before_separator(const char *s, ssize_t separator_pos)
+{
+	if (separator_pos == 0)
+		return 0;
+	return (s[separator_pos - 1] == ' ');
+}
+
+static int space_exists_after_separator(const char *s, ssize_t separator_pos)
+{
+	if (separator_pos <= 0)
+		return 0;
+	return (s[separator_pos + 1] == ' ');
+}
+
+static int space_exists_around_separator(const char *s, const char *separators)
+{
+	ssize_t separator_pos = find_separator(s, separators);
+	return (space_exists_before_separator(s, separator_pos) ||
+		space_exists_after_separator(s, separator_pos));
+}
+
+/*
+ * Formatting the separator depends on the key, because the key may be
+ * configured to come with its own separator.
+ */
+static void format_key_value_separator(struct strbuf *key,
+				       const struct trailer_processing_options *opts,
+				       struct trailer_subsystem_conf *tsc,
+				       struct strbuf *out)
+{
+	char c;
+
+	if (opts->value_only)
+		return;
+	/*
+	 * Print separator (between key and value) and space.
+	 */
+	if (opts->key_value_separator) {
+		strbuf_addbuf(out, opts->key_value_separator);
+		return;
+	}
+
+	/*
+	 * Print the default separator and space.
+	 */
+	c = last_non_space_char(key->buf);
+	if (!strchr(tsc->separators, c))
+		strbuf_addch(out, tsc->separators[0]);
+
+	if (!space_exists_around_separator(key->buf, tsc->separators))
+		strbuf_addch(out, ' ');
+}
+
+static void format_non_trailer(struct trailer *trailer,
+			       const struct trailer_processing_options *opts,
+			       struct strbuf *out)
+{
+	struct strbuf raw = STRBUF_INIT;
+
+	if (opts->only_trailers)
+		return;
+	/*
+	 * If this trailer was injected, then the raw field is
+	 * NULL because the injector only populates the key and
+	 * value.
+	 */
+	if (trailer->raw)
+		strbuf_addstr(&raw, trailer->raw);
+
+	if (opts->separator) {
+		strbuf_addbuf(out, opts->separator);
+		strbuf_rtrim(&raw);
+	}
+
+	strbuf_addbuf(out, &raw);
+}
+
+static void format_trailer(struct trailer *trailer,
+			   const struct trailer_processing_options *opts,
+			   struct trailer_subsystem_conf *tsc,
+			   int need_trailer_separator,
+			   struct strbuf *out)
+{
+	struct strbuf key = STRBUF_INIT;
+	struct strbuf val = STRBUF_INIT;
+
+	strbuf_addstr(&key, trailer->key);
+	strbuf_addstr(&val, trailer->value);
+
+	/* This is a non-trailer line. */
+	if (!key.len) {
+		format_non_trailer(trailer, opts, out);
+		return;
+	}
+
+	/*
+	 * Skip key/value pairs where the value was empty. This can happen from
+	 * trailers specified without a separator, like `--trailer
+	 * "Reviewed-by"` (no corresponding value).
+	 */
+	if (opts->trim_empty && !val.len)
+		return;
+
+	/*
+	 * Likewise, skip over keys that fail to match a filter if we specify
+	 * one.
+	 */
+	if (opts->filter && !opts->filter(&key, opts->filter_data))
+		return;
+
+	/*
+	 * Print a separator *before* the trailer. Useful for printing all
+	 * trailers into the same line.
+	 */
+	if (opts->separator && need_trailer_separator)
+		strbuf_addbuf(out, opts->separator);
+
+	/* Print the key. */
+	if (!opts->value_only)
+		strbuf_addbuf(out, &key);
+
+	if (!opts->key_only) {
+		/*
+		 * Print the separator (and optional space) between the key and
+		 * value.
+		 */
+		format_key_value_separator(&key, opts, tsc, out);
+
+		/* Print the value. */
+		strbuf_addbuf(out, &val);
+	}
+
+	/*
+	 * If there was no separator before the trailer (special case when
+	 * opts->separator is set), print final newline.
+	 */
+	if (!opts->separator)
+		strbuf_addch(out, '\n');
+}
+
+static void format_trailers_v2(struct trailer_block *trailer_block,
+		     const struct trailer_processing_options *opts,
+		     struct trailer_subsystem_conf *tsc,
+		     struct strbuf *out)
+{
+	struct list_head *pos;
+	int need_trailer_separator = 0;
+
+	list_for_each(pos, trailer_block->trailers) {
+		format_trailer(list_entry(pos, struct trailer, list),
+			       opts, tsc, need_trailer_separator, out);
+		need_trailer_separator = 1;
+	}
 }
 
 void format_trailers(struct trailer_block *trailer_block,

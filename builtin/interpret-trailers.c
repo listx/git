@@ -69,7 +69,6 @@ static int option_parse_trailer_template(const struct option *opt,
 	struct list_head *templates = opt->value;
 	struct trailer_conf *conf_current;
 	struct trailer *trailer;
-	ssize_t separator_pos;
 	static char *cl_separators;
 
 	if (unset) {
@@ -85,34 +84,40 @@ static int option_parse_trailer_template(const struct option *opt,
 	 * separators that are defined).
 	 */
 	cl_separators = xstrfmt("=%s", trailer_default_separators(tsc));
-	separator_pos = find_separator(arg, cl_separators);
-	trailer = parse_trailer_v2(arg, cl_separators, 0);
+	trailer = parse_trailer(arg, cl_separators, 0);
 	free(cl_separators);
 
-	if (separator_pos == 0) {
+	if (get_trailer_type(trailer) != TRAILER_OK) {
 		struct strbuf sb = STRBUF_INIT;
 		strbuf_addstr(&sb, arg);
 		strbuf_trim(&sb);
-		error(_("empty key in --trailer argument '%.*s'"),
+		error(_("invalid --trailer argument '%.*s'"),
 			(int) sb.len, sb.buf);
 		strbuf_release(&sb);
-	} else {
-		conf_current = get_matching_trailer_conf(tsc, trailer);
-
-		/*
-		 * Override conf_current with settings specified via CLI flags.
-		 */
-		if (where != WHERE_DEFAULT)
-			trailer_set_conf_where(where, conf_current);
-		if (if_exists != EXISTS_DEFAULT)
-			trailer_set_conf_if_exists(if_exists, conf_current);
-		if (if_missing != MISSING_DEFAULT)
-			trailer_set_conf_if_missing(if_missing, conf_current);
-
-		add_trailer_template(trailer, conf_current, templates);
-		free_trailer_conf(conf_current);
+		free_trailer(trailer);
+		return 0;
 	}
 
+	/*
+	 * The parsed trailer "key" may actually be a key alias. Check if we
+	 * have any configured key aliases that match, and if so, grab those
+	 * trailer configurations to populate conf_current.
+	 */
+	conf_current = get_matching_trailer_conf(tsc, trailer);
+
+	/*
+	 * Override conf_current with settings specified via CLI flags.
+	 */
+	if (where != WHERE_DEFAULT)
+		trailer_set_conf_where(where, conf_current);
+	if (if_exists != EXISTS_DEFAULT)
+		trailer_set_conf_if_exists(if_exists, conf_current);
+	if (if_missing != MISSING_DEFAULT)
+		trailer_set_conf_if_missing(if_missing, conf_current);
+
+	add_trailer_template(trailer, conf_current, templates);
+	free(conf_current);
+	free_trailer(trailer);
 	return 0;
 }
 

@@ -13,6 +13,10 @@
 
 struct trailer_conf {
 	char *key_alias;
+	/*
+	 * Typically the key won't have any spaces, like "Helped-by". But the
+	 * key may also include a space and separator, like "Fix: " or "Bug #".
+	 */
 	char *key;
 	char *command;
 	char *cmd;
@@ -622,6 +626,145 @@ static int git_trailer_config_general(const char *conf_key, const char *value,
 		}
 	}
 	return 0;
+}
+
+static void skip_whitespace(const char **c)
+{
+	while (**c) {
+		if (**c == ' ' || **c == '\t') {
+			(*c)++;
+			continue;
+		}
+		break;
+	}
+}
+
+/*
+ * Encode the different possible states of how a configuration line like
+ *
+ *     trailer.foo.key = "foo-bar: "
+ *
+ * may be parsed. Any extra leading and trailing space characters are ignored.
+ * The key (e.g., "foo-bar" above) is required, and is composed of
+ * alphanumeric characters or '-'. The key may be followed by some
+ * combination of space and a single separator character. A separator is any
+ * punctuation character except '-'.
+ */
+enum trailer_conf_key {
+	/*
+	 * Examples:
+	 * - "invalid key" (key characters may not contain a space)
+	 * - ":not-a-key" (separator begins the line)
+	 * - "key:val" (non-space text follows separator)
+	 * - "key::" (multiple non-key characters)
+	 * - "key=:" (multiple non-key characters)
+	 */
+	TRAILER_CONF_KEY__PARSE_FAILURE,
+
+	/*
+	 * Example:
+	 * - "key" (only key)
+	 */
+	TRAILER_CONF_KEY__KEY_ONLY,
+
+	/*
+	 * Example:
+	 * - "key:" (key and then separator)
+	 */
+	TRAILER_CONF_KEY__KEY_THEN_SEPARATOR,
+
+	/*
+	 * Example:
+	 * - "key: " (key and then separator and then space)
+	 */
+	TRAILER_CONF_KEY__KEY_THEN_SEPARATOR_THEN_SPACE,
+
+	/*
+	 * Example:
+	 * - "Bug #" (key and then space and then separator)
+	 */
+	TRAILER_CONF_KEY__KEY_THEN_SPACE_THEN_SEPARATOR
+};
+
+static enum trailer_conf_key parse_key_and_separator(const char *s,
+						     const char *separators,
+						     size_t *key_start,
+						     size_t *key_len,
+						     char *separator)
+{
+	const char *c = s;
+	const char *x;
+	int space_before_separator = 0;
+	int space_after_separator = 0;
+	int separator_found = 0;
+	int key_found = 0;
+
+	/*
+	 * Skip leading whitespace.
+	 */
+	skip_whitespace(&c);
+
+	*key_start = c - s;
+	x = c;
+
+	/*
+	 * Parse the key. The key is required.
+	 */
+	while (*c) {
+		if (isalnum(*c) || *c == '-') {
+			key_found = 1;
+			c++;
+			continue;
+		}
+		break;
+	}
+	if (!key_found)
+		return TRAILER_CONF_KEY__PARSE_FAILURE;
+
+	*key_len = c - x;
+
+	/*
+	 * Skip whitespace before the separator.
+	 */
+	x = c;
+	skip_whitespace(&c);
+	if (c > x)
+		space_before_separator = 1;
+
+	/*
+	 * Parse the separator, and one character after it.
+	 */
+	if (*c && strchr(separators, *c) && *c != '-') {
+		*separator = *c;
+		separator_found = 1;
+		c++;
+		/*
+		 * Skip any extra trailing whitespace characters.
+		 */
+		x = c;
+		skip_whitespace(&c);
+		if (c > x)
+			space_after_separator = 1;
+
+		/*
+		 * If there is any other non-whitespace character, this is
+		 * unexpected. This can happen if the input string is 'foo:x' or
+		 * "foo::".
+		 */
+		if (*c)
+			return TRAILER_CONF_KEY__PARSE_FAILURE;
+	}
+
+	if (!separator_found)
+		return TRAILER_CONF_KEY__KEY_ONLY;
+
+	if (!space_before_separator && !space_after_separator)
+		return TRAILER_CONF_KEY__KEY_THEN_SEPARATOR;
+
+	if (!space_before_separator && space_after_separator)
+		return TRAILER_CONF_KEY__KEY_THEN_SEPARATOR_THEN_SPACE;
+
+	return TRAILER_CONF_KEY__KEY_THEN_SPACE_THEN_SEPARATOR;
 }
 
 static int git_trailer_config_by_key_alias(const char *conf_key, const char *value,

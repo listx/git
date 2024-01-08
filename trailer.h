@@ -82,6 +82,72 @@ void get_independent_trailer_templates_from(struct trailer_subsystem_conf *tsc,
 void apply_trailer_templates(struct list_head *templates,
 			     struct trailer_block *trailer_block);
 
+/*
+ * The following represent the ways in which an arbitrary piece of text could be
+ * parsed as (or not as) a trailer. A trailer requires a key. All types except
+ * TRAILER_OK are "non-trailer" lines and lack any information about a key.
+ */
+enum trailer_type {
+	/*
+	 * TRAILER_UNINITIALIZED is not actually used anywhere directly. This is
+	 * the default setting if we allocate (xcalloc) a new trailer and forget
+	 * to do anything with it. That way the (brand new, unpopulated) trailer
+	 * won't confusingly have TRAILER_COMMENT as its trailer_type.
+	 */
+	TRAILER_UNINITIALIZED,
+	/*
+	 * Example: "# commented line"
+	 */
+	TRAILER_COMMENT,
+
+	/*
+	 * Examples:
+	 *
+	 *   - "  indented line"
+	 *   - "  key: value"    (looks like a trailer, but is still indented)
+	 */
+	TRAILER_INDENTED,
+
+	/*
+	 * This is a line that could not be parsed as a trailer with a key and
+	 * value. After they are parsed, we have to reach into the "raw" member
+	 * to print it back out during formatting. Examples:
+	 *
+	 *   - ""        (empty line)
+	 *   - "foo bar" (no separator; "foo" could be a key, but " bar" is not
+	 *                a value because there is no separator)
+	 *   - "foo$bar" (no sep; "foo$bar" cannot be a key ($ is invalid),
+	 *                and so "foo" could be a key but then "$bar" is junk)
+	 *   - ":"       (sep found, but no key)
+	 *   - ":val"    (sep found, but no key)
+	 *   - "(cherry picked from commit 00000000)" (Git-generated line)
+	 *
+	 * NEEDSWORK: Make the "(cherry picked ...)" Git-generated line be
+	 * parsed as TRAILER_OK with key "cherry picked from commit" and
+	 * value "00000000".
+	 */
+	TRAILER_JUNK,
+
+	/*
+	 * Key found. Separator and value are optional (however, if a value does
+	 * exist, then it may only come after a separator). Spaces may exist
+	 * around the separator.
+	 *
+	 * Examples:
+	 *
+	 *   - "key"      (key without sep)
+	 *   - "key:"     (key and sep)
+	 *   - "key: "    (key and sep)
+	 *   - "key #"    (key and sep)
+	 *   - "foo: bar" (key and sep and value)
+	 *   - "Signed-off-by: " (key and sep; also a Git-generated line)
+	 *
+	 * NOTE: The separator is hardcoded to be ":". But it can be overridden
+	 * with configuration.
+	 */
+	TRAILER_OK,
+};
+
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
 void parse_trailer_against_config(const char *trailer_string,

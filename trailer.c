@@ -121,11 +121,11 @@ const char *trailer_iter_val(struct trailer_iter *iter)
 struct trailer {
 	struct list_head list;
 	char *raw;
-	/*
-	 * If this is not a trailer line, the line is stored in value
-	 * (excluding the terminating newline) and key is NULL.
-	 */
+	enum trailer_type type;
 	char *key;
+	int space_before_separator;
+	char separator;
+	int space_after_separator;
 	char *value;
 };
 
@@ -854,6 +854,157 @@ static void parse_trailer(const char *trailer_string,
 		strbuf_addstr(key, trailer_string);
 		strbuf_trim(key);
 	}
+}
+
+static int skip_whitespace(const char **c)
+{
+	int whitespace_found = 0;
+	while (**c) {
+		if (**c == ' ' || **c == '\t') {
+			(*c)++;
+			whitespace_found = 1;
+			continue;
+		}
+		break;
+	}
+
+	return whitespace_found;
+}
+
+/*
+ * Parse text for a key and separator.
+ *
+ * The parameter "leading_whitespace_ends_parse" is used to parse indented text
+ * as TRAILER_INDENTED instead of TRAILER_JUNK or TRAILER_OK. When we are
+ * parsing a trailer block, we will want to check for trailers that have values
+ * split over multiple (indented) lines, in which case we'd want to set this
+ * flag to true.
+ *
+ * Technically values may contain newlines; we only strip trailing newlines from
+ * values (if a value was found).
+ */
+static struct trailer *parse_trailer_v2(const char *s,
+					const char *separators,
+					int leading_whitespace_ends_parse)
+{
+	const char *c = s;
+	const char *offset;
+	int leading_whitespace = 0;
+	size_t key_start = 0;
+	size_t key_len = 0;
+	size_t val_start = 0;
+	size_t val_len = 0;
+	struct trailer *trailer = xcalloc(1, sizeof(*trailer));
+
+	/*
+	 * Before we begin parsing, conservatively assume that this will fail to
+	 * parse as a trailer.
+	 */
+	trailer->type = TRAILER_JUNK;
+	trailer->key = xcalloc(1, sizeof(*c));
+	trailer->separator = '\0';
+	trailer->value = xcalloc(1, sizeof(*c));
+
+	/*
+	 * Preserve the input text as is, minus any trailing newlines.
+	 */
+	trailer->raw = xstrdup(s);
+
+	if (!strlen(s))
+		return trailer;
+
+	if (*c && *c == comment_line_char) {
+		trailer->type = TRAILER_COMMENT;
+		return trailer;
+	}
+
+	leading_whitespace = skip_whitespace(&c);
+
+	/*
+	 * If we want special treatment for indented text, return early.
+	 */
+	if (leading_whitespace && leading_whitespace_ends_parse) {
+		trailer->type = TRAILER_INDENTED;
+		return trailer;
+	}
+
+	/*
+	 * Parse the key.
+	 */
+	key_start = c - s;
+	offset = c;
+	while (*c) {
+		if (isalnum(*c) || *c == '-') {
+			c++;
+			continue;
+		}
+		break;
+	}
+	key_len = c - offset;
+	if (!key_len)
+		return trailer;
+
+	/*
+	 * Finally, we found a valid key. The separator (and the spaces around
+	 * it) and value are all optional.
+	 */
+	free(trailer->key);
+	trailer->key = xstrndup(s + key_start, key_len);
+	trailer->type = TRAILER_OK;
+
+	/*
+	 * Skip whitespace before the separator.
+	 */
+	if (skip_whitespace(&c))
+		trailer->space_before_separator = 1;
+
+	/*
+	 * Parse the separator, and one character after it.
+	 */
+	if (*c && strchr(separators, *c)) {
+		trailer->separator = *c;
+		c++;
+		/*
+		 * Skip any extra trailing whitespace characters.
+		 */
+		if (skip_whitespace(&c))
+			trailer->space_after_separator = 1;
+	}
+
+	/*
+	 * Parse the value, but only if a separator was found. Any trailing
+	 * newline in the value is trimmed. A value may contain newlines itself,
+	 * because in "--trailer <arg>" the <arg> may contain newlines.
+	 */
+	if (!trailer->separator) {
+		/*
+		 * If there was no separator, but there was still some text
+		 * after the key, then this is junk. This catches the case where
+		 * the text is like "foo bar", where "foo" is a valid key.
+		 */
+		if (*c)
+			trailer->type = TRAILER_JUNK;
+		return trailer;
+	}
+
+	val_start = c - s;
+	offset = c;
+	while (*c) c++;
+	/*
+	 * Trim any trailing newline characters out of the value, because this
+	 * is a character with special meaning to the trailer subsystem. The
+	 * newline is used as a delimiter for multiple trailers (in a trailer
+	 * block), but also as a way to "fold" the value over multiple indented
+	 * lines.
+	 */
+	while (*(c - 1) == '\n') c--;
+	val_len = c - offset;
+	if (val_len) {
+		free(trailer->value);
+		trailer->value = xstrndup(s + val_start, val_len);
+	}
+
+	return trailer;
 }
 
 void parse_trailer_against_config(const char *trailer_string,

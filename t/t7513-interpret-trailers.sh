@@ -556,12 +556,86 @@ test_expect_success 'with config setup' '
 	test_cmp expected actual
 '
 
+test_expect_success 'with config setup and key ending in separator and multiple spaces' '
+	test_config trailer.ack.key "Acked-by:  " &&
+	cat >expected <<-\EOF &&
+
+		Acked-by: Peff
+	EOF
+	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by :Peff" empty >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'with config setup and key ending in separator without space' '
+	test_config trailer.ack.key "Acked-by:" &&
+	cat >expected <<-\EOF &&
+
+		Acked-by:Peff
+	EOF
+	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by :Peff" empty >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'with config setup and space before separator (using default separator)' '
+	test_config trailer.ack.key "Acked-by :" &&
+	cat >expected <<-\EOF &&
+
+		Acked-by :Peff
+	EOF
+	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by : Peff" empty >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'with config setup and key ending in separator without space using non-default separator' '
+	test_config trailer.separators "%:=" &&
+	test_config trailer.ack.key "Acked-by=" &&
+	cat >expected <<-\EOF &&
+
+		Acked-by=Peff
+	EOF
+	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by%Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by :Peff" empty >actual &&
+	test_cmp expected actual
+'
+
 test_expect_success 'with config setup and ":=" as separators' '
 	test_config trailer.separators ":=" &&
 	test_config trailer.ack.key "Acked-by= " &&
 	cat >expected <<-\EOF &&
 
 		Acked-by= Peff
+	EOF
+	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by= Peff" empty >actual &&
+	test_cmp expected actual &&
+	git interpret-trailers --trim-empty --trailer "Acked-by : Peff" empty >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'with config setup and ":=" as separators with spaces before and after "="' '
+	test_config trailer.separators ":=" &&
+	test_config trailer.ack.key "Acked-by = " &&
+	cat >expected <<-\EOF &&
+
+		Acked-by = Peff
 	EOF
 	git interpret-trailers --trim-empty --trailer "ack = Peff" empty >actual &&
 	test_cmp expected actual &&

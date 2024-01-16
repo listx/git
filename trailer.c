@@ -111,6 +111,7 @@ struct trailer {
 	struct list_head list;
 
 	char *raw;
+	enum trailer_parse_result parse_result;
 
 	char *key;
 
@@ -208,8 +209,10 @@ static inline void strbuf_replace(struct strbuf *sb, const char *a, const char *
 static void free_trailer(struct trailer *trailer)
 {
 	free(trailer->raw);
-	free(trailer->key);
-	free(trailer->value);
+	if (trailer->key)
+		free(trailer->key);
+	if (trailer->value)
+		free(trailer->value);
 	free(trailer);
 }
 
@@ -631,143 +634,120 @@ static int git_trailer_config_general(const char *conf_key, const char *value,
 	return 0;
 }
 
-static void skip_whitespace(const char **c)
+static int skip_whitespace(const char **c)
 {
+	int whitespace_found = 0;
 	while (**c) {
 		if (**c == ' ' || **c == '\t') {
 			(*c)++;
+			whitespace_found = 1;
 			continue;
 		}
 		break;
 	}
+
+	return whitespace_found;
 }
 
 /*
- * Encode the different possible states of how a configuration line like
- *
- *     trailer.foo.key = "foo-bar: "
- *
- * may be parsed. Any extra leading and trailing space characters are ignored.
- * The key (e.g., "foo-bar" above) is required, and is composed of
- * alphanumeric characters or '-'. The key may be followed by some
- * combination of space and a single separator character. A separator is any
- * punctuation character except '-'.
+ * Parse a string line for a key and separator.
  */
-enum trailer_conf_key {
-	/*
-	 * Examples:
-	 * - "invalid key" (key characters may not contain a space)
-	 * - ":not-a-key" (separator begins the line)
-	 * - "key:val" (non-space text follows separator)
-	 * - "key::" (multiple non-key characters)
-	 * - "key=:" (multiple non-key characters)
-	 */
-	TRAILER_CONF_KEY__PARSE_FAILURE,
-
-	/*
-	 * Example:
-	 * - "key" (only key)
-	 */
-	TRAILER_CONF_KEY__KEY_ONLY,
-
-	/*
-	 * Example:
-	 * - "key:" (key and then separator)
-	 */
-	TRAILER_CONF_KEY__KEY_THEN_SEPARATOR,
-
-	/*
-	 * Example:
-	 * - "key: " (key and then separator and then space)
-	 */
-	TRAILER_CONF_KEY__KEY_THEN_SEPARATOR_THEN_SPACE,
-
-	/*
-	 * Example:
-	 * - "Bug #" (key and then space and then separator)
-	 */
-	TRAILER_CONF_KEY__KEY_THEN_SPACE_THEN_SEPARATOR
-};
-
-static enum trailer_conf_key parse_key_and_separator(const char *s,
-						     const char *separators,
-						     size_t *key_start,
-						     size_t *key_len,
-						     char *separator)
+static struct trailer *parse_trailer_v2(const char *s,
+					const char *separators,
+					int leading_whitespace_is_continuation)
 {
 	const char *c = s;
 	const char *x;
-	int space_before_separator = 0;
-	int space_after_separator = 0;
-	int separator_found = 0;
-	int key_found = 0;
+	int leading_whitespace = 0;
+	size_t key_start = 0;
+	size_t key_len = 0;
+	size_t val_start = 0;
+	size_t val_len = 0;
+	struct trailer *trailer = xcalloc(1, sizeof(*trailer));
+
+	trailer->raw = xstrdup(s);
+	trailer->key = NULL;
+	trailer->value = NULL;
+
+	if (!strlen(s)) {
+		trailer->parse_result = TRAILER_EMPTY_LINE;
+		return trailer;
+	}
+
+	if (*c && *c == '#') {
+		trailer->parse_result = TRAILER_COMMENT_LINE;
+		return trailer;
+	}
 
 	/*
 	 * Skip leading whitespace.
 	 */
-	skip_whitespace(&c);
-
-	*key_start = c - s;
-	x = c;
+	leading_whitespace = skip_whitespace(&c);
+	if (leading_whitespace_is_continuation && leading_whitespace) {
+		trailer->parse_result = TRAILER_CONTINUATION_LINE;
+		return trailer;
+	}
 
 	/*
-	 * Parse the key. The key is required.
+	 * Parse the key.
 	 */
+	key_start = c - s;
+	x = c;
 	while (*c) {
 		if (isalnum(*c) || *c == '-') {
-			key_found = 1;
 			c++;
 			continue;
 		}
 		break;
 	}
-	if (!key_found)
-		return TRAILER_CONF_KEY__PARSE_FAILURE;
-
-	*key_len = c - x;
+	key_len = c - x;
+	if (key_len)
+		trailer->key = xstrndup(s + key_start, key_len);
 
 	/*
 	 * Skip whitespace before the separator.
 	 */
-	x = c;
-	skip_whitespace(&c);
-	if (c > x)
-		space_before_separator = 1;
+	if (skip_whitespace(&c))
+		trailer->space_before_separator = 1;
 
 	/*
 	 * Parse the separator, and one character after it.
 	 */
 	if (*c && strchr(separators, *c) && *c != '-') {
-		*separator = *c;
-		separator_found = 1;
+		trailer->separator = *c;
 		c++;
 		/*
 		 * Skip any extra trailing whitespace characters.
 		 */
-		x = c;
-		skip_whitespace(&c);
-		if (c > x)
-			space_after_separator = 1;
-
-		/*
-		 * If there is any other non-whitespace character, this is
-		 * unexpected. This can happen if the input string is 'foo:x' or
-		 * "foo::".
-		 */
-		if (*c)
-			return TRAILER_CONF_KEY__PARSE_FAILURE;
+		if (skip_whitespace(&c))
+			trailer->space_after_separator = 1;
 	}
 
-	if (!separator_found)
-		return TRAILER_CONF_KEY__KEY_ONLY;
+	/*
+	 * Parse the value.
+	 */
+	val_start = c - s;
+	x = c;
+	while (*c) c++;
+	val_len = c - x;
+	if (val_len)
+		trailer->value = xstrndup(s + val_start, val_len);
 
-	if (!space_before_separator && !space_after_separator)
-		return TRAILER_CONF_KEY__KEY_THEN_SEPARATOR;
+	if (!trailer->separator) {
+		trailer->parse_result = TRAILER_NO_SEPARATOR;
 
-	if (!space_before_separator && space_after_separator)
-		return TRAILER_CONF_KEY__KEY_THEN_SEPARATOR_THEN_SPACE;
+		/*
+		 * Differentiate between "foo" (only one word found) and "foo
+		 * bar".
+		 */
+		 if (!val_len)
+			trailer->parse_result = TRAILER_NO_SEPARATOR_KEY_ONLY;
+	} else if (!key_len)
+		trailer->parse_result = TRAILER_EMPTY_KEY;
+	else
+		trailer->parse_result = TRAILER_OK;
 
-	return TRAILER_CONF_KEY__KEY_THEN_SPACE_THEN_SEPARATOR;
+	return trailer;
 }
 
 static int git_trailer_config_by_key_alias(const char *conf_key, const char *value,
@@ -925,78 +905,6 @@ ssize_t find_separator(const char *trailer_string, const char *separators)
 		break;
 	}
 	return -1;
-}
-
-/*
- * Parse a string that could have a trailer in it.
- */
-static enum trailer_parse_result parse_trailer_v2(const char *trailer_string,
-					const char *separators,
-					struct strbuf *raw,
-					struct strbuf *key,
-					int *space_before_separator,
-					char *separator,
-					int *space_after_separator,
-					struct strbuf *val)
-{
-	ssize_t separator_pos = find_separator(trailer_string, separators);
-	struct strbuf raw_trimmed = STRBUF_INIT;
-	ssize_t i;
-	const char *c;
-
-	strbuf_addstr(raw, trailer_string);
-	strbuf_addstr(&raw_trimmed, trailer_string);
-	strbuf_trim(&raw_trimmed);
-
-	if (!raw->len || !raw_trimmed.len) {
-		strbuf_release(&raw_trimmed);
-		return TRAILER_PARSE_RESULT_EMPTY_LINE;
-	}
-	strbuf_release(&raw_trimmed);
-
-	if (separator_pos == -1) {
-		if (raw->buf[0] == comment_line_char) {
-			return TRAILER_PARSE_RESULT_COMMENT_LINE;
-		}
-
-		if (isspace(raw->buf[0])) {
-			return TRAILER_PARSE_RESULT_LEADING_SPACE;
-		}
-
-		return TRAILER_PARSE_RESULT_NO_SEPARATOR;
-	}
-
-	if (separator_pos == 0) {
-		return TRAILER_PARSE_RESULT_EMPTY_KEY;
-	}
-
-	/*
-	 * Parse the key.
-	 */
-	i = separator_pos;
-	while (i > 0 && isspace(trailer_string[i - 1]))
-		i--;
-	strbuf_add(key, trailer_string, i);
-
-	/*
-	 * Parse the separator. Remember if there was a space before/after the
-	 * separator.
-	 */
-	*separator = trailer_string[separator_pos];
-	if (i != separator_pos)
-		*space_before_separator = 1;
-	c = &trailer_string[separator_pos + 1];
-	if (c && isspace(*c))
-		*space_after_separator = 1;
-
-	/*
-	 * Parse the value (result may be empty, or have some non-space
-	 * characters).
-	 */
-	strbuf_addstr(val, trailer_string + separator_pos + 1);
-	strbuf_trim(val);
-
-	return TRAILER_PARSE_RESULT_OK;
 }
 
 /*

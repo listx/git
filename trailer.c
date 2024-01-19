@@ -297,6 +297,12 @@ static void alloc_target_of(struct trailer_injector *injector,
 {
 	struct trailer *target = xcalloc(1, sizeof(*target));
 
+	/*
+	 * Trailers created with an injector are always trailers with a key and
+	 * value.
+	 */
+	target->parse_result = TRAILER_OK;
+
 	switch (injector->conf.where) {
 	case WHERE_START:
 		list_add(&target->list, trailers);
@@ -715,14 +721,19 @@ struct trailer *parse_trailer(const char *s,
 	}
 
 	/*
-	 * Parse the value. The value may not contain any newline characters.
+	 * Parse the value. Any trailing newline in the value is trimmed. A
+	 * value may contain newlines itself, because in "--trailer <arg>" the
+	 * <arg> may contain newlines.
 	 */
 	val_start = c - s;
 	x = c;
-	while (*c && *c != '\n' && *c != '\r') c++;
+	while (*c) c++;
+	while (*(c - 1) == '\n' || *(c - 1) == '\r')
+		c--;
 	val_len = c - x;
-	if (val_len)
+	if (val_len) {
 		trailer->value = xstrndup(s + val_start, val_len);
+	}
 
 	if (!trailer->separator) {
 		trailer->parse_result = TRAILER_NO_SEPARATOR;
@@ -1255,16 +1266,22 @@ static void format_trailer(struct trailer *trailer,
 	struct strbuf key = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 
-	strbuf_addstr(&key, trailer->key);
-	strbuf_addstr(&val, trailer->value);
-
-	error("raw is: '%s'", trailer->raw);
+	error("XXX parse_result: %d", trailer->parse_result);
+	error("X raw is: '%s', parse_result: %d", trailer->raw, trailer->parse_result);
+	error("X  key: '%s', val: '%s'", trailer->key, trailer->value);
 
 	/* This is a non-trailer line. */
-	if (!key.len) {
+	if (trailer->parse_result != TRAILER_OK) {
 		format_non_trailer(trailer, opts, out);
 		return;
 	}
+
+	error("HAAAAAAA");
+	strbuf_addstr(&key, trailer->key);
+	error("BBBBBBBB");
+	if (trailer->value)
+		strbuf_addstr(&val, trailer->value);
+	error("CCCCCCCC");
 
 	/*
 	 * Skip key/value pairs where the value was empty. This can happen from

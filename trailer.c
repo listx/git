@@ -746,6 +746,16 @@ enum trailer_parse_result get_trailer_parse_result(struct trailer *trailer)
 	return trailer->parse_result;
 }
 
+char *get_trailer_key(struct trailer *trailer)
+{
+	return trailer->key;
+}
+
+char *get_trailer_val(struct trailer *trailer)
+{
+	return trailer->value;
+}
+
 static int git_trailer_config_by_key_alias(const char *conf_key, const char *value,
 					   const struct config_context *ctx UNUSED,
 					   void *cb_data)
@@ -1247,6 +1257,8 @@ static void format_trailer(struct trailer *trailer,
 
 	strbuf_addstr(&key, trailer->key);
 	strbuf_addstr(&val, trailer->value);
+
+	error("raw is: '%s'", trailer->raw);
 
 	/* This is a non-trailer line. */
 	if (!key.len) {

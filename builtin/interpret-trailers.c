@@ -74,6 +74,8 @@ static int option_parse_trailer_injector(const struct option *opt,
 	struct trailer_conf *conf_current;
 	struct trailer *trailer;
 	enum trailer_parse_result parse_result;
+	struct strbuf sb = STRBUF_INIT;
+	char *tval;
 
 	if (unset) {
 		free_trailer_injectors(injectors);
@@ -85,25 +87,43 @@ static int option_parse_trailer_injector(const struct option *opt,
 
 	trailer = parse_trailer(arg, cl_separators, 0);
 	parse_result = get_trailer_parse_result(trailer);
+	error("arg is: %s", arg);
+	error("parse result is: %d", parse_result);
 
-	if (parse_result == TRAILER_EMPTY_KEY) {
-		struct strbuf sb = STRBUF_INIT;
+	switch (parse_result) {
+	case TRAILER_EMPTY_KEY:
 		strbuf_addstr(&sb, arg);
 		strbuf_trim(&sb);
 		error(_("empty key in --trailer argument '%.*s'"),
 			(int) sb.len, sb.buf);
 		strbuf_release(&sb);
 		return 0;
+	/*
+	 * If we failed to parse the argument as a key/value pair (example:
+	 * "--trailer foo" where there is no separator), then treat the entire
+	 * arg ("foo") as a key (key alias), to be looked up against
+	 * configuration (search for any trailer.foo.* configs).
+	 */
+	case TRAILER_NO_SEPARATOR_KEY_ONLY:
+		strbuf_addstr(&key, arg);
+		break;
+	case TRAILER_OK:
+		strbuf_addstr(&key, get_trailer_key(trailer));
+		/* The value may not have been parsed. */
+		tval = get_trailer_val(trailer);
+		if (tval)
+			strbuf_addstr(&val, get_trailer_val(trailer));
+		break;
+	default:
+		strbuf_addstr(&sb, arg);
+		strbuf_trim(&sb);
+		error(_("invalid --trailer argument '%.*s'"),
+			(int) sb.len, sb.buf);
+		strbuf_release(&sb);
+		return 0;
 	}
 
-	/*
-	 * If we failed to parse the argument as a key (example: "--trailer foo"
-	 * where there is no separator), then treat the entire arg ("foo") as a
-	 * key (key alias), to be looked up against configuration (search for
-	 * any trailer.foo.* configs).
-	 */
-	if (parse_result != TRAILER_OK)
-		strbuf_addstr(&key, arg);
+	error("interpret: key: '%s', val: '%s'", key.buf, val.buf);
 
 	/* Lookup if the key matches something in the config */
 	parse_trailer_against_config(&key, &conf, tsc);

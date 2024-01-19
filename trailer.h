@@ -114,6 +114,8 @@ struct trailer *parse_trailer(const char *s,
 			      int leading_whitespace_is_continuation);
 
 enum trailer_parse_result get_trailer_parse_result(struct trailer *);
+char *get_trailer_key(struct trailer *);
+char *get_trailer_val(struct trailer *);
 
 void parse_trailer_against_config(struct strbuf *key,
 				  const struct trailer_conf **conf,

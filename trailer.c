@@ -724,11 +724,11 @@ static struct trailer *parse_trailer_v2(const char *s,
 	}
 
 	/*
-	 * Parse the value.
+	 * Parse the value. The value may not contain any newline characters.
 	 */
 	val_start = c - s;
 	x = c;
-	while (*c) c++;
+	while (*c && *c != '\n' && *c != '\r') c++;
 	val_len = c - x;
 	if (val_len)
 		trailer->value = xstrndup(s + val_start, val_len);

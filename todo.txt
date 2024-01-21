@@ -1,0 +1,136 @@
+TODO
+
+- Simplify finding the start of the trailer block (retire find_separator
+  (replace with parse_trailer))
+
+- bug: git shortlog -ns '--group=trailer:signed-off-by' is empty (should
+  be fixed by above knowledge of separators) if we define a
+  "trailer.sign.key = 'Signed-off-by: '" because the entire
+  "Signed-off-by: " string is read in as the key (same bug as above
+  which we encountered when removing parsing of keys from the formatter)
+
+  The (ugly) workaround is to use "git shortlog -ns
+  '--group=trailer:signed-off-by: '" (with a ": " suffix).
+
+  This bug should be fixed with the new space-aware config parsing. Add
+  the breaking test before that commit and confirm that the change
+  unbreaks that test.
+
+- reduce the universe of possible separators to be ASCII in trailer.*
+  configuration, just like we did in d3b3419f8f (config: tell the user that we
+  expect an ASCII character, 2023-03-27).
+
+- make append_signoff() use the trailer API, instead of clumsily trying to use
+  the iterator to perform business logic that the API already knows how to do.
+
+- Make git-commit use the trailer API, instead of running
+  interpret-trailers as a subprocess
+
+- retire the _DEFAULT enums altogether (make these invalid states
+  unrepresentable)
+
+- doc: State that comment lines are always ignored, except the last
+  comment line (because finding the end of the trailer block will never
+  capture any trailing comment lines, resulting in the last comment line
+  being treated as "the input after the trailer block", such that it
+  still gets displayed)
+
+  - Although ideally we'd just truncate away all comment lines instead of keeping
+    the very last comment line while truncating earlier ones (seems
+    unintuitive), this is a historical wart for old git behavior,
+    captured in the 'with message that has an old style conflict block'
+    test case from 3d24a7267d (trailer: add test with an old style
+    conflict block, 2014-11-09).
+
+- (fix this) add NEEDSWORK for starting the deprecation schedule for '.command'
+  configuration option
+
+  The main weird thing about this option is that it is assumed to be
+  "independent" and always treated as if the user had specified
+  "--trailer ..." for this key
+  alias (get_independent_trailer_injectors_from(), which gets configured
+  injectors with the .command option). But technically nothing stops
+  '.cmd' from also being "independent" (it can also say "echo ..." which
+  doesn't take any arguments).
+
+  Instead, we should add a new flag like ".mode" which takes
+  values like this:
+
+    - manual: (default) only add this trailer if "--trailer foo" is given
+    - always: always pretend that "--trailer foo" was given
+    - auto: like always, but do nothing if "--trailer foo:bar" was
+      given already by the user to avoid adding it twice
+
+  Then from get_independent_trailer_injectors_from(), we can collect
+  ".command" AND ".cmd" trailers (which have ".mode = always" or ".mode
+  = auto")
+
+- do any final renames (e.g., same_key() should be is_prefix_of() or
+  similar_key())
+
+- reorder all functions in trailer.{c,h} to be clearer (e.g., move all structs
+  up to the top, colocate/group functions together).
+
+- add Documentation/technical/trailer.txt to explain trailer parsing internals
+  (explain the data structures and how the parser and formatter work), to help
+  make the entire trailer.c implementation more readable. Explain all parsing
+  rules and how trailer parsing works at the "single trailer" level
+  (parse_trailer()) and multi-trailer (aka trailer block) level
+  ("parse_trailer_block"). Authoritatively the 25% heuristic here and also how
+  git_generated_prefixes are handled as pseudo-trailers (and what happens, for
+  example, if users provide '--trailer "Signed-off-by: "' which exactly matches
+  the prefix of a git_generated_prefix).
+
+- (thought experiment): Gerrit currently encodes "Change-Id: ..." on its own
+  separate line at the bottom of the log message, ignoring any existing trailer
+  block. This behavior breaks our current trailer block parser, but we could
+  make the trailer implementation able to optionally skip over blank lines if
+  the next block is itself 25% trailers. Something to consider if we want to
+  allow users to use interpret-trailers effectively with Gerrit.
+
+- (housekeeping) see if GGG uses patience algorithm for generating patches for
+  the list with /preview. If so, we can combine the "refactor and delete large
+  chunks" patches together into one.
+
+- add unit tests
+
+- (feature?): git-commit: add config variable for automatically adding a signoff
+  only if the original author's identity (name/email) matches the current user
+  and if no such trailer already exists in the log message's trailer block (if
+  any). This option already exists for format-patch, but sadly doesn't work for
+  GitGitGadget users who don't use format-patch to send emails to the list.
+
+- (feature?): git-commit: generalize the trailer block parser to be usable for
+  not just trailers but all regions inside git-commit. Then git-commit can
+  finally allow comment characters to appear at the beginning of the line in
+  paragraphs. We could use the same sort of "25% heuristic" type of algorithm to
+  say "this contiguous region of text is 95% non-comment lines, so treat all
+  lines in this paragraph as text we want to include". The current behavior of
+  interpreting the #12345 as a comment in the following commit message paragraph
+
+    Lorem ipsum. Lorem ipsum. Lorem ipsum. Lorem ipsum. This commit fixes
+    #12345 and #23456. Lorem ipsum. Lorem ipsum. Lorem ipsum. Lorem ipsum.
+    Lorem ipsum. Lorem ipsum. Lorem ipsum. Lorem ipsum.
+
+  (which IIRC results in deleting that entire line) is really annoying.
+
+- (thought experiment, not really todo) Add conformance tests in Rust (property tests)
+
+  - We can be more explicit about the "grammar" of trailers, and then
+  check for random input and see that the C algorithm agrees with the
+  explicit, higher-level specification defined in Rust (perhaps simply
+  using the above regular expression), and make sure that the two agree
+
+  - This way we get the advantage of thinking about things at a higher
+  level in Rust, but without having to rewrite existing C code
+
+  - The trailer API uses opaque pointers, so there is virtually no risk
+  of "you are not testing the pure C part; your Rust-based tests are
+  contaminated too much with the code that marshals/unmarshals structs
+  from/to Rust/C" because Rust will have no knowledge of the internals
+  of the trailer-related structs (except currently the options struct,
+  which could be put behind an opaque pointer as well, if we wanted to
+  do fuzzing of that). Rust already knows how to do marshaling
+  automatically for C structs though so the options struct could
+  probably still remain as a publicly exposed struct.
+

@@ -31,6 +31,9 @@ test_expect_success 'setup' '
 		Reviewed-by: Z
 		Signed-off-by: Z
 	EOF
+
+	cat complex_message_body complex_message_trailers >complex_message &&
+
 	cat >basic_patch <<-\EOF
 		---
 		 foo.txt | 2 +-
@@ -712,7 +715,6 @@ test_expect_success 'with basic patch' '
 # Providing and not providing "--only-trailers" should agree to show the input
 # trailer block as is without modification.
 test_expect_success 'same trailer block with and without --only-trailers' '
-	cat complex_message_body complex_message_trailers >complex_message &&
 	git interpret-trailers complex_message | tail -n 4 >actual &&
 	sed -e "s/ Z\$/ /" >expected <<-\EOF &&
 		Fixes: Z
@@ -731,7 +733,6 @@ test_expect_success 'same trailer block with and without --only-trailers' '
 test_expect_success 'same trailer block with and without --only-trailers, regardless of configuration' '
 	test_config trailer.separators ":=" &&
 	test_config trailer.ack.key "Acked-by= " &&
-	cat complex_message_body complex_message_trailers >complex_message &&
 	git interpret-trailers complex_message | tail -n 4 >actual &&
 	sed -e "s/ Z\$/ /" >expected <<-\EOF &&
 		Fixes: Z
@@ -747,7 +748,6 @@ test_expect_success 'same trailer block with and without --only-trailers, regard
 test_expect_success 'with commit complex message as argument' '
 	test_config trailer.separators ":=" &&
 	test_config trailer.ack.key "Acked-by= " &&
-	cat complex_message_body complex_message_trailers >complex_message &&
 	cat complex_message_body >expected &&
 	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
 		Fixes: Z

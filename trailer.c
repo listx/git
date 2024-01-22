@@ -1171,16 +1171,18 @@ static size_t find_end_of_log_message(const char *input, int no_divider)
 	/* Assume the naive end of the input is already what we want. */
 	end = strlen(input);
 
-	if (no_divider)
-		return end;
+	/*
+	 * Look for a divider ("---\n" string) to treat as an early end
+	 * of the input.
+	 */
+	if (!no_divider) {
+		for (s = input; *s; s = next_line(s)) {
+			const char *v;
 
-	/* Optionally skip over any patch part ("---" line and below). */
-	for (s = input; *s; s = next_line(s)) {
-		const char *v;
-
-		if (skip_prefix(s, "---", &v) && isspace(*v)) {
-			end = s - input;
-			break;
+			if (skip_prefix(s, "---", &v) && isspace(*v)) {
+				end = s - input;
+				break;
+			}
 		}
 	}
 
@@ -1480,16 +1482,6 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 	 */
 	for (raw = trailer_block_lines; *raw; raw++) {
 		cur_trailer = parse_trailer((*raw)->buf, opts->tsc->separators, 1);
-
-		/*
-		 * If there's a blank line, it means we're at the end of a
-		 * trailer block (a trailer block may not contain any blank
-		 * lines).
-		 */
-		if (strlen(cur_trailer->raw) && cur_trailer->raw[0] == '\n') {
-			free_trailer(cur_trailer);
-			break;
-		}
 
 		if (cur_trailer->type == TRAILER_COMMENT) {
 			free_trailer(cur_trailer);

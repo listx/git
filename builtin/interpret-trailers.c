@@ -68,9 +68,8 @@ static int option_parse_trailer_template(const struct option *opt,
 					 const char *arg, int unset)
 {
 	struct list_head *templates = opt->value;
-	struct strbuf key = STRBUF_INIT;
-	struct strbuf val = STRBUF_INIT;
-	struct trailer_conf *conf_current = new_trailer_conf();
+	struct trailer_conf *conf_current;
+	struct trailer *trailer;
 	ssize_t separator_pos;
 
 	if (unset) {
@@ -82,17 +81,18 @@ static int option_parse_trailer_template(const struct option *opt,
 		return -1;
 
 	separator_pos = find_separator(arg, cl_separators);
+	trailer = parse_trailer_v2(arg, cl_separators, 0);
 	if (separator_pos) {
-		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, conf_current);
+		conf_current = get_matching_trailer_conf(tsc, trailer);
 
 		/*
 		 * Override conf_current with settings specified via CLI flags.
 		 */
 		trailer_conf_set(where, if_exists, if_missing, conf_current);
 
-		add_trailer_template(strbuf_detach(&key, NULL),
-				     strbuf_detach(&val, NULL),
-				     conf_current, templates);
+		add_trailer_template(trailer, conf_current, templates);
+
+		free(conf_current);
 	} else {
 		struct strbuf sb = STRBUF_INIT;
 		strbuf_addstr(&sb, arg);
@@ -101,8 +101,6 @@ static int option_parse_trailer_template(const struct option *opt,
 			(int) sb.len, sb.buf);
 		strbuf_release(&sb);
 	}
-
-	free(conf_current);
 
 	return 0;
 }

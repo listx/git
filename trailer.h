@@ -216,9 +216,9 @@ int blank_line_before_trailer_block(struct trailer_block *);
 void trailer_block_release(struct trailer_block *);
 
 struct trailer_subsystem_conf *trailer_subsystem_init(void);
-void format_trailers(const struct trailer_processing_options *,
-		     struct trailer_block *,
-		     struct strbuf *out);
+void format_trailer_block(const struct trailer_processing_options *,
+			  const struct trailer_block *,
+			  struct strbuf *out);
 void free_trailers(struct list_head *);
 void free_trailer_conf(struct trailer_conf *);
 void free_trailer_templates(struct list_head *);
@@ -226,11 +226,11 @@ void free_trailer(struct trailer *);
 
 /*
  * Convenience function to format the trailers from the commit msg "msg" into
- * the strbuf "out". Reuses format_trailers() internally.
+ * the strbuf "out". Reuses format_trailer_block() internally.
  */
-void format_trailers_from_commit(struct trailer_processing_options *,
-				 const char *msg,
-				 struct strbuf *out);
+void format_trailer_block_from_commit(struct trailer_processing_options *,
+				      const char *msg,
+				      struct strbuf *out);
 
 /*
  * Initialize iterator for walking over the trailers in the commit

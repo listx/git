@@ -2034,8 +2034,8 @@ static void grab_sub_body_contents(struct atom_value *val, int deref, struct exp
 			else
 				msg = subpos;
 
-			/* Format the trailer info according to the trailer_opts given */
-			format_trailers_from_commit(&atom->u.contents.trailer_opts, msg, &s);
+			/* Format the trailer block according to the trailer_opts given */
+			format_trailer_block_from_commit(&atom->u.contents.trailer_opts, msg, &s);
 			free(to_free);
 
 			v->s = strbuf_detach(&s, NULL);

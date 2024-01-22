@@ -1239,14 +1239,15 @@ static int match_placeholder_bool_arg(const char *to_parse, const char *candidat
 	return 1;
 }
 
-static int format_trailer_match_cb(const struct strbuf *key, void *ud)
+static int format_trailer_match_cb(const char *key, void *ud)
 {
 	const struct string_list *list = ud;
 	const struct string_list_item *item;
+	size_t key_len = strlen(key);
 
 	for_each_string_list_item (item, list) {
-		if (key->len == (uintptr_t)item->util &&
-		    !strncasecmp(item->string, key->buf, key->len))
+		if (key_len == (uintptr_t)item->util &&
+		    !strncasecmp(item->string, key, key_len))
 			return 1;
 	}
 	return 0;

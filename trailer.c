@@ -1489,16 +1489,6 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 	for (raw = trailer_block_lines; *raw; raw++) {
 		cur_trailer = parse_trailer((*raw)->buf, opts->tsc->separators, 1);
 
-		/*
-		 * If there's a blank line, it means we're at the end of a
-		 * trailer block (a trailer block may not contain any blank
-		 * lines).
-		 */
-		if (strlen(cur_trailer->raw) && cur_trailer->raw[0] == '\n') {
-			free_trailer(cur_trailer);
-			break;
-		}
-
 		if (cur_trailer->type == TRAILER_COMMENT) {
 			free_trailer(cur_trailer);
 			continue;

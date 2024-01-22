@@ -1405,15 +1405,11 @@ static void format_non_trailer(const struct trailer *trailer,
 static int skip_formatting_trailer(const struct trailer *trailer,
 				   const struct trailer_processing_options *opts)
 {
-	struct strbuf key = STRBUF_INIT;
-
 	if (trailer->type != TRAILER_OK) {
 		if (opts->only_trailers)
 				return 1;
 		return 0;
 	}
-
-	strbuf_addstr(&key, trailer->key);
 
 	/*
 	 * Skip key/value pairs where the value was empty. This can happen from
@@ -1429,7 +1425,7 @@ static int skip_formatting_trailer(const struct trailer *trailer,
 	 * Likewise, skip over keys that fail to match a filter if we specify
 	 * one.
 	 */
-	if (opts->filter && !opts->filter(&key, opts->filter_data))
+	if (opts->filter && !opts->filter(trailer->key, opts->filter_data))
 		return 1;
 
 	if (opts->key_only && opts->value_only)

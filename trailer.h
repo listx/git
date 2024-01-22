@@ -68,7 +68,7 @@ struct trailer_processing_options {
 	int value_only;
 	const struct strbuf *separator;
 	const struct strbuf *key_value_separator;
-	int (*filter)(const struct strbuf *, void *);
+	int (*filter)(const char*, void *);
 	void *filter_data;
 };
 

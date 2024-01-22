@@ -103,7 +103,7 @@ struct trailer_iter {
 	 * which case at least 25% must be trailer lines).
 	 */
 	const char *raw;
-	struct strbuf key;
+	const char *key;
 	struct strbuf val;
 };
 
@@ -114,7 +114,7 @@ const char *trailer_iter_raw(struct trailer_iter *iter)
 
 const char *trailer_iter_key(struct trailer_iter *iter)
 {
-	return iter->key.buf;
+	return iter->key;
 }
 
 const char *trailer_iter_val(struct trailer_iter *iter)
@@ -1623,7 +1623,6 @@ struct trailer_iter *trailer_iter_init(const char *msg)
 {
 	struct trailer_iter *iter = xcalloc(1, sizeof(*iter));
 	struct trailer_processing_options opts = TRAILER_PROCESSING_OPTIONS_INIT;
-	strbuf_init(&iter->key, 0);
 	strbuf_init(&iter->val, 0);
 	opts.no_divider = 1;
 	iter->tsc = trailer_subsystem_init();
@@ -1641,9 +1640,7 @@ int trailer_iter_advance(struct trailer_iter *iter)
 		trailer = list_entry(iter->cur, struct trailer, list);
 
 		iter->raw = trailer->raw;
-		strbuf_reset(&iter->key);
-		if (trailer->key != NULL)
-			strbuf_addstr(&iter->key, trailer->key);
+		iter->key = trailer->key;
 		strbuf_reset(&iter->val);
 		strbuf_addstr(&iter->val, trailer->value);
 		/* Always unfold values during iteration. */
@@ -1658,7 +1655,6 @@ void trailer_iter_release(struct trailer_iter *iter)
 {
 	trailer_block_release(iter->trailer_block);
 	strbuf_release(&iter->val);
-	strbuf_release(&iter->key);
 	free(iter);
 }
 

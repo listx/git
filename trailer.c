@@ -916,8 +916,15 @@ struct trailer *parse_trailer(const char *s,
 	/*
 	 * Preserve the input text as is, minus any trailing newlines.
 	 */
-	trailer->raw = xstrdup(s);
+	offset = c;
+	while (*c) c++;
+	if (c > offset) {
+		while (*(c - 1) == '\n') c--;
+		trailer->raw = xstrndup(s, c - s);
+	} else
+		trailer->raw = xstrdup(s);
 
+	c = s;
 	if (!strlen(s))
 		return trailer;
 
@@ -1357,21 +1364,19 @@ static void format_separator_and_spaces(const struct trailer *trailer,
 
 static void format_non_trailer(const struct trailer *trailer,
 			       const struct trailer_processing_options *opts,
+			       int need_trailer_separator,
 			       struct strbuf *out)
 {
-	struct strbuf raw = STRBUF_INIT;
-
 	if (opts->only_trailers)
 		return;
 
-	strbuf_addstr(&raw, trailer->raw);
-
-	if (opts->separator) {
+	if (opts->separator && need_trailer_separator)
 		strbuf_addbuf(out, opts->separator);
-		strbuf_rtrim(&raw);
-	}
 
-	strbuf_addbuf(out, &raw);
+	strbuf_addstr(out, trailer->raw);
+
+	if (!opts->separator)
+		strbuf_addch(out, '\n');
 }
 
 static void format_trailer(const struct trailer *trailer,
@@ -1387,7 +1392,7 @@ static void format_trailer(const struct trailer *trailer,
 
 	/* This is a non-trailer line. */
 	if (trailer->type != TRAILER_OK) {
-		format_non_trailer(trailer, opts, out);
+		format_non_trailer(trailer, opts, need_trailer_separator, out);
 		return;
 	}
 
@@ -1494,22 +1499,17 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 		 */
 		if (cur_trailer->type == TRAILER_INDENTED && last_trailer) {
 			struct strbuf last_val = STRBUF_INIT;
-			free_trailer(cur_trailer);
 			strbuf_attach(&last_val, last_trailer->value,
 				      strlen(last_trailer->value),
 				      strlen(last_trailer->value));
 			/*
 			 * We have to manually add a newline (because any
 			 * newline in the last trailer's value would have been
-			 * trimmed inside parse_trailer()). And, because we are
-			 * appending the raw text to the last trailer's value,
-			 * we have to trim this ourselves (because we are
-			 * bypassing parse_trailer()).
+			 * trimmed inside parse_trailer()).
 			 */
 			strbuf_addch(&last_val, '\n');
-			strbuf_addbuf(&last_val, *raw);
-			strbuf_rtrim(&last_val);
-
+			strbuf_addstr(&last_val, cur_trailer->raw);
+			free_trailer(cur_trailer);
 			last_trailer->value = strbuf_detach(&last_val, NULL);
 			continue;
 		}

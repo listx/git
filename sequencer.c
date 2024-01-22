@@ -5291,9 +5291,15 @@ void append_signoff(struct strbuf *msgbuf, size_t ignore_footer, unsigned flag)
 	struct strbuf sob = STRBUF_INIT;
 	int has_footer;
 
+	/*
+	 * NEEDSWORK: Use the trailer API to add a "Signed-off-by: " trailer
+	 * here, instead of doing it manually. We can also retire no_dup_sob and
+	 * instead just use the existing "where = end, ifexists, do nothing"
+	 * mechanism that the trailer API already understands, instead of doing
+	 * this ourselves with the iterator in has_conforming_footer().
+	 */
 	strbuf_addstr(&sob, sign_off_header);
 	strbuf_addstr(&sob, fmt_name(WANT_COMMITTER_IDENT));
-	strbuf_addch(&sob, '\n');
 
 	if (!ignore_footer)
 		strbuf_complete_line(msgbuf);
@@ -5338,9 +5344,11 @@ void append_signoff(struct strbuf *msgbuf, size_t ignore_footer, unsigned flag)
 				append_newlines, strlen(append_newlines));
 	}
 
-	if (has_footer != 3 && (!no_dup_sob || has_footer != 2))
+	if (has_footer != 3 && (!no_dup_sob || has_footer != 2)) {
 		strbuf_splice(msgbuf, msgbuf->len - ignore_footer, 0,
 				sob.buf, sob.len);
+		strbuf_addch(msgbuf, '\n');
+	}
 
 	strbuf_release(&sob);
 }

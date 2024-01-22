@@ -29,8 +29,27 @@ struct trailer_subsystem_conf {
  * defaults.
  */
 struct trailer_conf {
+	/*
+	 * The configuration line 'trailer.foo.key = "Foo: "' has "foo" as the
+	 * key_alias, and "Foo" as the key. It also defines ":" as the desired
+	 * separator, which should have a space after it. Here are some other
+	 * examples:
+	 *
+	 *   - 'trailer.help.key = "Helped-by"' (for the separator, use the
+	 *     first one in the configuration for trailer.separators, or use the
+	 *     default separator ':' as a fallback)
+	 *
+	 *   - 'trailer.bug.key = "Bug #"' (for the separator, use '#', and make
+	 *     sure there is no space after the separator).
+	 *
+	 * Note that the key_alias may be set without setting a key (example:
+	 * 'trailer.sign.command = "echo hello"').
+	 */
 	char *key_alias;
 	char *key;
+	int space_before_separator;
+	char separator;
+	int space_after_separator;
 	char *command;
 	char *cmd;
 	enum trailer_where where;
@@ -161,28 +180,15 @@ static int after_or_end(enum trailer_where where)
 	return (where == WHERE_AFTER) || (where == WHERE_END);
 }
 
-/*
- * Return the length of the string not including any final
- * punctuation. E.g., the input "Signed-off-by:" would return
- * 13, stripping the trailing punctuation but retaining
- * internal punctuation.
- */
-static size_t key_len_without_separator(const char *key, size_t len)
-{
-	while (len > 0 && !isalnum(key[len - 1]))
-		len--;
-	return len;
-}
-
 static int same_key(struct trailer *a, struct trailer_template *b)
 {
 	size_t a_len, b_len, min_len;
 
-	if (!a->key)
+	if (!a->key || !b->key)
 		return 0;
 
-	a_len = key_len_without_separator(a->key, strlen(a->key));
-	b_len = key_len_without_separator(b->key, strlen(b->key));
+	a_len = strlen(a->key);
+	b_len = strlen(b->key);
 	min_len = (a_len > b_len) ? b_len : a_len;
 
 	return !strncasecmp(a->key, b->key, min_len);
@@ -213,7 +219,7 @@ static inline void strbuf_replace(struct strbuf *sb, const char *a, const char *
 		strbuf_splice(sb, ptr - sb->buf, strlen(a), b, strlen(b));
 }
 
-static void free_trailer(struct trailer *trailer)
+void free_trailer(struct trailer *trailer)
 {
 	free(trailer->raw);
 	free(trailer->key);
@@ -365,9 +371,16 @@ static void populate_template_value(struct trailer_template *template)
 static void apply(struct trailer_template *template)
 {
 	free(template->target->key);
-	free(template->target->value);
 	template->target->key = xstrdup(template->key);
+
+	template->target->space_before_separator = template->conf.space_before_separator;
+	template->target->separator = template->conf.separator;
+	template->target->space_after_separator = template->conf.space_after_separator;
+
+	free(template->target->value);
 	template->target->value = xstrdup(template->value);
+
+	template->target->type = TRAILER_OK;
 }
 
 /*
@@ -580,20 +593,20 @@ void trailer_conf_set(enum trailer_where where,
 		conf->if_missing = if_missing;
 }
 
-struct trailer_conf *new_trailer_conf(void)
-{
-	struct trailer_conf *new = xcalloc(1, sizeof(*new));
-	return new;
-}
-
-void duplicate_trailer_conf(struct trailer_conf *dst,
-			    const struct trailer_conf *src)
+static void duplicate_trailer_conf(struct trailer_conf *dst,
+				   const struct trailer_conf *src)
 {
 	*dst = *src;
 	dst->key_alias = xstrdup_or_null(src->key_alias);
 	dst->key = xstrdup_or_null(src->key);
+	dst->space_before_separator = src->space_before_separator;
+	dst->separator = src->separator;
+	dst->space_after_separator = src->space_after_separator;
 	dst->command = xstrdup_or_null(src->command);
 	dst->cmd = xstrdup_or_null(src->cmd);
+	dst->where = src->where;
+	dst->if_exists = src->if_exists;
+	dst->if_missing = src->if_missing;
 }
 
 static struct trailer_template *get_or_add_template_by(const char *key_alias,
@@ -610,11 +623,23 @@ static struct trailer_template *get_or_add_template_by(const char *key_alias,
 	}
 
 	/* Template does not already exist; create it. */
-	CALLOC_ARRAY(template, 1);
+	template = xcalloc(1, sizeof(*template));
+	/*
+	 * The key_alias may be the only thing we have in configuration, if the
+	 * user does not supply "trailer.*.key = ...". We still need to make
+	 * sure that the template has good defaults here, so default to the
+	 * key_alias itself as the key to use for now. Later on if we see an
+	 * explicit key setting, we can override this value in
+	 * git_trailer_config_by_key_alias().
+	 */
+	template->key = xstrdup(key_alias);
 	template->conf.where = tsc->where;
 	template->conf.if_exists = tsc->if_exists;
 	template->conf.if_missing = tsc->if_missing;
 	template->conf.key_alias = xstrdup(key_alias);
+	template->conf.space_before_separator = 0;
+	template->conf.separator = tsc->separators[0];
+	template->conf.space_after_separator = 1;
 	template->target = NULL;
 
 	list_add_tail(&template->list, tsc->templates);
@@ -675,18 +700,19 @@ static int git_trailer_config_by_key_alias(const char *opt, const char *setting,
 					   const struct config_context *ctx UNUSED,
 					   void *cb_data)
 {
-	const char *trailer, *variable_name;
+	const char *trailer_config_line, *variable_name;
 	struct trailer_template *template;
 	struct trailer_conf *conf;
 	char *key_alias = NULL;
 	enum trailer_info_type type;
 	int i;
 	struct trailer_subsystem_conf *tsc;
+	struct trailer *trailer;
 
-	if (!skip_prefix(opt, "trailer.", &trailer))
+	if (!skip_prefix(opt, "trailer.", &trailer_config_line))
 		return 0;
 
-	variable_name = strrchr(trailer, '.');
+	variable_name = strrchr(trailer_config_line, '.');
 	if (!variable_name)
 		return 0;
 
@@ -694,7 +720,8 @@ static int git_trailer_config_by_key_alias(const char *opt, const char *setting,
 	for (i = 0; i < ARRAY_SIZE(trailer_config_items); i++) {
 		if (strcmp(trailer_config_items[i].name, variable_name))
 			continue;
-		key_alias = xstrndup(trailer,  variable_name - trailer - 1);
+		key_alias = xstrndup(trailer_config_line,
+				     variable_name - trailer_config_line- 1);
 		type = trailer_config_items[i].type;
 		break;
 	}
@@ -713,7 +740,37 @@ static int git_trailer_config_by_key_alias(const char *opt, const char *setting,
 			warning(_("option '%s' set more than once"), opt);
 		if (!setting)
 			return config_error_nonbool(opt);
-		conf->key = xstrdup(setting);
+
+		/*
+		 * The string "foo-bar: " in
+		 *
+		 *     trailer.foo.key = "foo-bar: "
+		 *
+		 * can also be parsed as a "trailer" using the parse_trailer_v2()
+		 * helper, because that function understands all the nuances of
+		 * parsing text that looks like a trailer.
+		 */
+		trailer = parse_trailer_v2(setting, tsc->separators, 0);
+
+		if (trailer->type == TRAILER_OK) {
+			conf->key = xstrdup(trailer->key);
+			free(template->key);
+			template->key = xstrdup(trailer->key);
+			/*
+			 * If the key string had a separator in it, prefer that
+			 * over the default separator. Also record the
+			 * whitespace preferences around the separator found in
+			 * the config.
+			 */
+			if (trailer->separator) {
+				conf->space_before_separator = trailer->space_before_separator;
+				conf->separator = trailer->separator;
+				conf->space_after_separator = trailer->space_after_separator;
+			}
+		} else
+			BUG("trailer.c: could not parse key '%s'", setting);
+
+		free_trailer(trailer);
 		break;
 	case TRAILER_COMMAND:
 		if (conf->command)
@@ -782,15 +839,6 @@ struct trailer_subsystem_conf *trailer_subsystem_init(void)
 	default_tsc.configured = 1;
 
 	return &default_tsc;
-}
-
-static const char *key_or_key_alias_from(struct trailer_template *template, char *tok)
-{
-	if (template->conf.key)
-		return template->conf.key;
-	if (tok)
-		return tok;
-	return template->conf.key_alias;
 }
 
 static int key_matches_template(const char *key,
@@ -883,9 +931,9 @@ static int skip_whitespace(const char **c)
  * Technically values may contain newlines; we only strip trailing newlines from
  * values (if a value was found).
  */
-static struct trailer *parse_trailer_v2(const char *s,
-					const char *separators,
-					int leading_whitespace_ends_parse)
+struct trailer *parse_trailer_v2(const char *s,
+				 const char *separators,
+				 int leading_whitespace_ends_parse)
 {
 	const char *c = s;
 	const char *offset;
@@ -1007,54 +1055,64 @@ static struct trailer *parse_trailer_v2(const char *s,
 	return trailer;
 }
 
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key, struct strbuf *val,
-				  struct trailer_conf *conf)
+struct trailer_conf *get_matching_trailer_conf(const struct trailer_subsystem_conf *tsc,
+					       const struct trailer *trailer)
 {
-	struct trailer_template *template;
-	size_t key_len;
 	struct list_head *pos;
+	struct trailer_template *template;
+	struct trailer_conf *conf = xcalloc(1, sizeof(*conf));
 
-	parse_trailer(trailer_string, separator_pos, key, val);
-
-	/*
-	 * Set trailer configuration defaults in case there's nothing found in
-	 * the config.
-	 */
-	if (conf) {
-		conf->where = tsc->where;
-		conf->if_exists = tsc->if_exists;
-		conf->if_missing = tsc->if_missing;
-	}
+	/* Prepare defaults in case there's nothing in the config. */
+	conf->separator = tsc->separators[0];
+	conf->space_before_separator = 0;
+	conf->space_after_separator = 1;
+	conf->where = tsc->where;
+	conf->if_exists = tsc->if_exists;
+	conf->if_missing = tsc->if_missing;
 
 	/* Lookup if the key matches something in the config */
-	key_len = key_len_without_separator(key->buf, key->len);
 	list_for_each(pos, tsc->templates) {
 		template = list_entry(pos, struct trailer_template, list);
-		if (key_matches_template(key->buf, template, key_len)) {
-			char *key_buf = strbuf_detach(key, NULL);
-			if (conf) {
-				duplicate_trailer_conf(conf, &template->conf);
-				conf->where = template->conf.where;
-				conf->if_exists = template->conf.if_exists;
-				conf->if_missing = template->conf.if_missing;
-			}
-			strbuf_addstr(key, key_or_key_alias_from(template, key_buf));
-			free(key_buf);
+		if (key_matches_template(trailer->key, template, strlen(trailer->key))) {
+			duplicate_trailer_conf(conf, &template->conf);
 			break;
 		}
 	}
+
+	return conf;
 }
 
-void add_trailer_template(char *key, char *val, const struct trailer_conf *conf,
-			  struct list_head *templates)
+static struct trailer_template *make_trailer_template(const struct trailer *trailer,
+						      const struct trailer_conf *conf)
 {
 	struct trailer_template *template = xcalloc(1, sizeof(*template));
-	template->key = key;
-	template->value = val;
+	/*
+	 * The "key" defined in configuration is guaranteed to be the full key.
+	 * For example, given
+	 *
+	 *     trailer.foo.key = "Foo-bar"
+	 *
+	 * prefer to use "Foo-bar" over just "foo" found in the parsed trailer,
+	 * because the parsed trailer's key could also be the key alias (as in
+	 * the case of "foo").
+	 */
+	if (conf->key)
+		template->key = xstrdup(conf->key);
+	else
+		template->key = xstrdup(trailer->key);
+	template->conf.space_before_separator = conf->space_before_separator;
+	template->conf.separator = conf->separator;
+	template->conf.space_after_separator = conf->space_after_separator;
+	template->value = xstrdup_or_null(trailer->value);
 	duplicate_trailer_conf(&template->conf, conf);
+	return template;
+}
+
+void add_trailer_template(const struct trailer *trailer,
+			  const struct trailer_conf *conf,
+			  struct list_head *templates)
+{
+	struct trailer_template *template = make_trailer_template(trailer, conf);
 	list_add_tail(&template->list, templates);
 }
 
@@ -1080,10 +1138,12 @@ void get_independent_trailer_templates_from(struct trailer_subsystem_conf *tsc,
 	 */
 	list_for_each(pos, tsc->templates) {
 		template = list_entry(pos, struct trailer_template, list);
-		if (template->conf.command)
-			add_trailer_template(xstrdup(key_or_key_alias_from(template,
-									   NULL)),
-					     xstrdup(""), &template->conf, out);
+		if (template->conf.command) {
+			struct trailer_template *copy = xcalloc(1, sizeof(*copy));
+			duplicate_trailer_conf(&copy->conf, &template->conf);
+			copy->key = xstrdup(template->key);
+			list_add_tail(&copy->list, out);
+		}
 	}
 }
 
@@ -1364,7 +1424,7 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 			/*
 			 * We have to manually add a newline (because any
 			 * newline in the last trailer's value would have been
-			 * trimmed inside parse_trailer()). And, because we are
+			 * trimmed inside parse_trailer_v2()). And, because we are
 			 * appending the raw text to the last trailer's value,
 			 * we have to trim this ourselves (because we are
 			 * bypassing parse_trailer()).

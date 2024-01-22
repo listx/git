@@ -170,19 +170,19 @@ void trailer_block_release(struct trailer_block *trailer_block);
 
 struct trailer_subsystem_conf *trailer_subsystem_init(void);
 
-void format_trailers(const struct trailer_processing_options *opts,
-		     struct trailer_block *trailer_block,
-		     struct strbuf *out);
+void format_trailer_block(const struct trailer_processing_options *opts,
+			  const struct trailer_block *trailer_block,
+			  struct strbuf *out);
 void free_trailer_templates(struct list_head *trailer_templates);
 void free_trailers(struct list_head *trailers);
 void free_trailer(struct trailer *);
 /*
  * Convenience function to format the trailers from the commit msg "msg" into
- * the strbuf "out". Reuses format_trailers internally.
+ * the strbuf "out". Reuses format_trailer_block() internally.
  */
-void format_trailers_from_commit(struct trailer_processing_options *opts,
-				 const char *msg,
-				 struct strbuf *out);
+void format_trailer_block_from_commit(struct trailer_processing_options *opts,
+				      const char *msg,
+				      struct strbuf *out);
 
 /*
  * Initialize "iter" in preparation for walking over the trailers in the commit

@@ -196,7 +196,7 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 	}
 
 	/* Print trailer block. */
-	format_trailers(opts, trailer_block, &tb);
+	format_trailer_block(opts, trailer_block, &tb);
 	fwrite(tb.buf, 1, tb.len, outfile);
 	strbuf_release(&tb);
 

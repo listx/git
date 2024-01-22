@@ -67,8 +67,8 @@ static int option_parse_trailer_template(const struct option *opt,
 					 const char *arg, int unset)
 {
 	struct list_head *templates = opt->value;
-	struct strbuf key = STRBUF_INIT;
-	struct strbuf val = STRBUF_INIT;
+	struct trailer_conf *conf_current;
+	struct trailer *trailer;
 	ssize_t separator_pos;
 	static char *cl_separators;
 
@@ -86,6 +86,7 @@ static int option_parse_trailer_template(const struct option *opt,
 	 */
 	cl_separators = xstrfmt("=%s", trailer_default_separators(tsc));
 	separator_pos = find_separator(arg, cl_separators);
+	trailer = parse_trailer_v2(arg, cl_separators, 0);
 	free(cl_separators);
 
 	if (separator_pos == 0) {
@@ -96,8 +97,7 @@ static int option_parse_trailer_template(const struct option *opt,
 			(int) sb.len, sb.buf);
 		strbuf_release(&sb);
 	} else {
-		struct trailer_conf *conf_current = new_trailer_conf();
-		parse_trailer_against_config(arg, separator_pos, tsc, &key, &val, conf_current);
+		conf_current = get_matching_trailer_conf(tsc, trailer);
 
 		/*
 		 * Override conf_current with settings specified via CLI flags.
@@ -109,10 +109,7 @@ static int option_parse_trailer_template(const struct option *opt,
 		if (if_missing != MISSING_DEFAULT)
 			trailer_set_conf_if_missing(if_missing, conf_current);
 
-		add_trailer_template(strbuf_detach(&key, NULL),
-				     strbuf_detach(&val, NULL),
-				     conf_current,
-				     templates);
+		add_trailer_template(trailer, conf_current, templates);
 		free_trailer_conf(conf_current);
 	}
 

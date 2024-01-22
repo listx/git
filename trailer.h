@@ -18,6 +18,7 @@ struct trailer_conf;
 
 struct trailer_block;
 struct trailer_iter;
+struct trailer;
 
 enum trailer_where {
 	WHERE_DEFAULT,
@@ -49,13 +50,10 @@ void trailer_conf_set(enum trailer_where where,
 		      enum trailer_if_missing if_missing,
 		      struct trailer_conf *conf);
 
-struct trailer_conf *new_trailer_conf(void);
-void duplicate_trailer_conf(struct trailer_conf *dst,
-			    const struct trailer_conf *src);
-
 const char *trailer_default_separators(struct trailer_subsystem_conf *tsc);
 
-void add_trailer_template(char *key, char *val, const struct trailer_conf *conf,
+void add_trailer_template(const struct trailer *trailer,
+			  const struct trailer_conf *conf,
 			  struct list_head *templates);
 
 struct trailer_processing_options {
@@ -150,12 +148,12 @@ enum trailer_type {
 
 ssize_t find_separator(const char *trailer_string, const char *separators);
 
-void parse_trailer_against_config(const char *trailer_string,
-				  ssize_t separator_pos,
-				  struct trailer_subsystem_conf *tsc,
-				  struct strbuf *key,
-				  struct strbuf *val,
-				  struct trailer_conf *conf);
+struct trailer *parse_trailer_v2(const char *s,
+			      const char *separators,
+			      int leading_whitespace_is_continuation);
+
+struct trailer_conf *get_matching_trailer_conf(const struct trailer_subsystem_conf *tsc,
+					       const struct trailer *trailer);
 
 struct trailer_block *parse_trailer_block(const struct trailer_processing_options *opts,
 					  const char *str);
@@ -173,6 +171,7 @@ void format_trailers(const struct trailer_processing_options *opts,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
 void free_trailer_templates(struct list_head *);
+void free_trailer(struct trailer *);
 
 /*
  * Convenience function to format the trailers from the commit msg "msg" into

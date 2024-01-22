@@ -787,7 +787,7 @@ test_expect_success '%(trailers:valueonly) shows only values' '
 
 test_expect_success '%(trailers:key=foo,keyonly,valueonly) shows nothing' '
 	git log --no-walk --pretty="format:%(trailers:key=Acked-by,keyonly,valueonly)" >actual &&
-	echo >expect &&
+	: >expect &&
 	test_cmp expect actual
 '
 

@@ -1303,33 +1303,6 @@ continue_outer_loop:
 	return len;
 }
 
-static void unfold_value(struct strbuf *val)
-{
-	struct strbuf out = STRBUF_INIT;
-	size_t i;
-
-	strbuf_grow(&out, val->len);
-	i = 0;
-	while (i < val->len) {
-		char c = val->buf[i++];
-		if (c == '\n') {
-			/* Collapse continuation down to a single space. */
-			while (i < val->len && isspace(val->buf[i]))
-				i++;
-			strbuf_addch(&out, ' ');
-		} else {
-			strbuf_addch(&out, c);
-		}
-	}
-
-	/* Empty lines may have left us with whitespace cruft at the edges */
-	strbuf_trim(&out);
-
-	/* output goes back to val as if we modified it in-place */
-	strbuf_swap(&out, val);
-	strbuf_release(&out);
-}
-
 /*
  * Formatting the separator depends on the key, because the key may be
  * configured to come with its own separator.
@@ -1362,39 +1335,85 @@ static void format_separator_and_spaces(const struct trailer *trailer,
 		strbuf_addch(out, ' ');
 }
 
-static void format_non_trailer(const struct trailer *trailer,
-			       const struct trailer_processing_options *opts,
-			       int need_trailer_separator,
-			       struct strbuf *out)
+static void unfold_value(struct strbuf *val)
 {
-	if (opts->only_trailers)
-		return;
+	struct strbuf out = STRBUF_INIT;
+	size_t i;
 
-	if (opts->separator && need_trailer_separator)
-		strbuf_addbuf(out, opts->separator);
+	strbuf_grow(&out, val->len);
+	i = 0;
+	while (i < val->len) {
+		char c = val->buf[i++];
+		if (c == '\n') {
+			/* Collapse continuation down to a single space. */
+			while (i < val->len && isspace(val->buf[i]))
+				i++;
+			strbuf_addch(&out, ' ');
+		} else {
+			strbuf_addch(&out, c);
+		}
+	}
 
-	strbuf_addstr(out, trailer->raw);
+	/* Empty lines may have left us with whitespace cruft at the edges */
+	strbuf_trim(&out);
 
-	if (!opts->separator)
-		strbuf_addch(out, '\n');
+	/* output goes back to val as if we modified it in-place */
+	strbuf_swap(&out, val);
+	strbuf_release(&out);
 }
 
-static void format_trailer(const struct trailer *trailer,
-			   const struct trailer_processing_options *opts,
-			   int need_trailer_separator,
-			   struct strbuf *out)
+static void format_trailer_value(const struct trailer *trailer,
+				 const struct trailer_processing_options *opts,
+				 struct strbuf *out)
+{
+	/*
+	 * Print the separator (and optional spaces) around the
+	 * separator.
+	 */
+	format_separator_and_spaces(trailer, opts, out);
+
+	/* Print the value. */
+	if (opts->unfold) {
+		struct strbuf val = STRBUF_INIT;
+		strbuf_addstr(&val, trailer->value);
+		unfold_value(&val);
+		strbuf_addbuf(out, &val);
+	} else
+		strbuf_addstr(out, trailer->value);
+}
+
+static void format_ok_trailer(const struct trailer *trailer,
+			      const struct trailer_processing_options *opts,
+			      struct strbuf *out)
+{
+	if (opts->key_only)
+		strbuf_addstr(out, trailer->key);
+	else if (opts->value_only)
+		format_trailer_value(trailer, opts, out);
+	else {
+		strbuf_addstr(out, trailer->key);
+		format_trailer_value(trailer, opts, out);
+	}
+}
+
+static void format_non_trailer(const struct trailer *trailer,
+			       struct strbuf *out)
+{
+	strbuf_addstr(out, trailer->raw);
+}
+
+static int skip_formatting_trailer(const struct trailer *trailer,
+				   const struct trailer_processing_options *opts)
 {
 	struct strbuf key = STRBUF_INIT;
-	struct strbuf val = STRBUF_INIT;
+
+	if (trailer->type != TRAILER_OK) {
+		if (opts->only_trailers)
+				return 1;
+		return 0;
+	}
 
 	strbuf_addstr(&key, trailer->key);
-	strbuf_addstr(&val, trailer->value);
-
-	/* This is a non-trailer line. */
-	if (trailer->type != TRAILER_OK) {
-		format_non_trailer(trailer, opts, need_trailer_separator, out);
-		return;
-	}
 
 	/*
 	 * Skip key/value pairs where the value was empty. This can happen from
@@ -1403,14 +1422,28 @@ static void format_trailer(const struct trailer *trailer,
 	 * configuration option for "Reviewed-by" which knows how to populate
 	 * the value (by running a command).
 	 */
-	if (opts->trim_empty && !val.len)
-		return;
+	if (opts->trim_empty && !strlen(trailer->value))
+		return 1;
 
 	/*
 	 * Likewise, skip over keys that fail to match a filter if we specify
 	 * one.
 	 */
 	if (opts->filter && !opts->filter(&key, opts->filter_data))
+		return 1;
+
+	if (opts->key_only && opts->value_only)
+		return 1;
+
+	return 0;
+}
+
+static void format_trailer(const struct trailer *trailer,
+			   const struct trailer_processing_options *opts,
+			   int need_trailer_separator,
+			   struct strbuf *out)
+{
+	if (skip_formatting_trailer(trailer, opts))
 		return;
 
 	/*
@@ -1420,23 +1453,14 @@ static void format_trailer(const struct trailer *trailer,
 	if (opts->separator && need_trailer_separator)
 		strbuf_addbuf(out, opts->separator);
 
-	/* Print the key. */
-	if (!opts->value_only)
-		strbuf_addbuf(out, &key);
-
-	if (!opts->key_only) {
-		/*
-		 * Print the separator (and optional spaces) around the
-		 * separator.
-		 */
-		format_separator_and_spaces(trailer, opts, out);
-
-		/* Print the value. */
-		if (opts->unfold)
-			unfold_value(&val);
-
-		strbuf_addbuf(out, &val);
-	}
+	/*
+	 * Print the "meat" of the trailer --- either the trailer's key/value
+	 * (happy path), or the raw contents if it wasn't a trailer.
+	 */
+	if (trailer->type == TRAILER_OK)
+		format_ok_trailer(trailer, opts, out);
+	else
+		format_non_trailer(trailer, out);
 
 	if (!opts->separator)
 		strbuf_addch(out, '\n');

@@ -238,15 +238,6 @@ static void free_template(struct trailer_template *template)
 	free(template);
 }
 
-static char last_non_space_char(const char *s)
-{
-	int i;
-	for (i = strlen(s) - 1; i >= 0; i--)
-		if (!isspace(s[i]))
-			return s[i];
-	return '\0';
-}
-
 /*
  * Check if the template's key and value has not been seen yet in either the
  * current trailer or the rest of trailers, in one direction. That is, we only
@@ -1458,9 +1449,9 @@ static void format_trailer(const struct trailer *trailer,
 		strbuf_addch(out, '\n');
 }
 
-static void format_trailer_block(const struct trailer_processing_options *opts,
-				 const struct trailer_block *trailer_block,
-				 struct strbuf *out)
+void format_trailer_block(const struct trailer_processing_options *opts,
+			  const struct trailer_block *trailer_block,
+			  struct strbuf *out)
 {
 	struct list_head *pos;
 	int need_trailer_separator = 0;
@@ -1606,72 +1597,9 @@ void trailer_block_release(struct trailer_block *trailer_block)
 	free(trailer_block);
 }
 
-void format_trailers(const struct trailer_processing_options *opts,
-		     struct trailer_block *trailer_block,
-		     struct strbuf *out)
-{
-	size_t origlen = out->len;
-	struct list_head *pos;
-	struct trailer *trailer;
-
-	list_for_each(pos, trailer_block->trailers) {
-		trailer = list_entry(pos, struct trailer, list);
-		if (trailer->key) {
-			struct strbuf key = STRBUF_INIT;
-			struct strbuf val = STRBUF_INIT;
-			strbuf_addstr(&key, trailer->key);
-			strbuf_addstr(&val, trailer->value);
-
-			/*
-			 * Skip key/value pairs where the value was empty. This
-			 * can happen from trailers specified without a
-			 * separator, like `--trailer "Reviewed-by"` (no
-			 * corresponding value).
-			 */
-			if (opts->trim_empty && !strlen(trailer->value))
-				continue;
-
-			if (!opts->filter || opts->filter(&key, opts->filter_data)) {
-				if (opts->separator && out->len != origlen)
-					strbuf_addbuf(out, opts->separator);
-				if (!opts->value_only)
-					strbuf_addbuf(out, &key);
-				if (!opts->key_only && !opts->value_only) {
-					if (opts->key_value_separator)
-						strbuf_addbuf(out, opts->key_value_separator);
-					else {
-						char c = last_non_space_char(key.buf);
-						if (c) {
-							if (!strchr(opts->tsc->separators, c))
-								strbuf_addf(out, "%c ", opts->tsc->separators[0]);
-						}
-					}
-				}
-				if (!opts->key_only)
-					strbuf_addbuf(out, &val);
-				if (!opts->separator)
-					strbuf_addch(out, '\n');
-			}
-			strbuf_release(&key);
-			strbuf_release(&val);
-
-		} else if (!opts->only_trailers) {
-			if (opts->separator && out->len != origlen) {
-				strbuf_addbuf(out, opts->separator);
-			}
-			/* Print non-trailer line as is. */
-			strbuf_addstr(out, trailer->value);
-			if (opts->separator)
-				strbuf_rtrim(out);
-			else
-				strbuf_addch(out, '\n');
-		}
-	}
-}
-
-void format_trailers_from_commit(struct trailer_processing_options *opts,
-				 const char *msg,
-				 struct strbuf *out)
+void format_trailer_block_from_commit(struct trailer_processing_options *opts,
+				      const char *msg,
+				      struct strbuf *out)
 {
 	LIST_HEAD(trailers);
 	struct trailer_block *trailer_block;
@@ -1685,7 +1613,7 @@ void format_trailers_from_commit(struct trailer_processing_options *opts,
 		strbuf_add(out, msg + trailer_block->start,
 			   trailer_block->end - trailer_block->start);
 	} else
-		format_trailers(opts, trailer_block, out);
+		format_trailer_block(opts, trailer_block, out);
 
 	trailer_block_release(trailer_block);
 }

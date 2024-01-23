@@ -834,6 +834,23 @@ static int skip_whitespace(const char **c)
 	return whitespace_found;
 }
 
+static int skip_indented_lines(const char **c)
+{
+	int indented_lines_found = 0;
+	while (**c && (**c == ' ' || **c == '\t')) {
+		indented_lines_found = 1;
+		while (**c && **c != '\n') (*c)++;
+		/*
+		 * Skip over to next line to see if it's also
+		 * indented, but only if we're not looking at a
+		 * NUL char.
+		 */
+		(*c)++;
+	}
+
+	return indented_lines_found;
+}
+
 /*
  * Parse text for a key and separator.
  *
@@ -1444,62 +1461,77 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 {
 	struct trailer_block *trailer_block = trailer_block_new();
 	size_t end_of_log_message = 0, trailer_block_start = 0;
-	struct strbuf **trailer_block_lines, **raw;
-	struct trailer *last_trailer = NULL;
-	struct trailer *cur_trailer = NULL;
+	struct trailer *trailer = NULL;
+	const char *bol, *eol, *c, *x;
+	int indented_lines_found;
+	char *raw;
 
 	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
 	trailer_block_start = find_trailer_block_start(str, end_of_log_message, opts->tsc);
 
-	trailer_block_lines = strbuf_split_buf(str + trailer_block_start,
-					       end_of_log_message - trailer_block_start,
-					       '\n',
-					       0);
 	/*
 	 * Parse all lines in the trailer block. Note that we treat both trailer
 	 * strings and non-trailer strings as "trailers", by creating a
 	 * "trailer" for each one.
 	 */
-	for (raw = trailer_block_lines; *raw; raw++) {
-		cur_trailer = parse_trailer((*raw)->buf, opts->tsc->separators, 1);
+	bol = c = str + trailer_block_start;
+	while (*c && c < (str + end_of_log_message)) {
+		/*
+		 * Point "eol" to the end of the current line.
+		 */
+		while (*c && *c != '\n') c++;
+		eol = c;
 
-		if (cur_trailer->type == TRAILER_COMMENT) {
-			free_trailer(cur_trailer);
+		/*
+		 * Abort if we see an empty line, because a trailer block cannot
+		 * have an empty line in it. We can get an empty line if there
+		 * are two newlines in a row.
+		 */
+		if (eol == bol)
+			break;
+		/*
+		 * Construct a NUL-terminated raw string to feed into
+		 * parse_trailer(), and parse it.
+		 */
+		raw = xstrndup(bol, eol - bol);
+		trailer = parse_trailer(raw, opts->tsc->separators, 1);
+		free(raw);
+
+		if (trailer->type == TRAILER_COMMENT) {
+			free_trailer(trailer);
+			bol = ++c;
+			continue;
+		}
+
+		if (trailer->type != TRAILER_OK) {
+			list_add_tail(&trailer->list, trailer_block->trailers);
+			bol = ++c;
 			continue;
 		}
 
 		/*
-		 * Grow the last-parsed trailer if this line is a continuation
-		 * (starts with a space).
+		 * If we are looking at a regular trailer, then seek past any
+		 * number of additional lines that all start with an indented
+		 * line. This way, we can feed in a multiline raw string to
+		 * parse_trailer() to parse a multiline trailer (because it can
+		 * already handle multiline input). If we didn't do this, we'd
+		 * have to make indented lines add their contents back to a
+		 * previously-parsed trailer, which would make this parser that
+		 * much more complicated.
 		 */
-		if (cur_trailer->type == TRAILER_INDENTED && last_trailer) {
-			struct strbuf last_val = STRBUF_INIT;
-			strbuf_attach(&last_val, last_trailer->value,
-				      strlen(last_trailer->value),
-				      strlen(last_trailer->value));
-			/*
-			 * We have to manually add a newline (because any
-			 * newline in the last trailer's value would have been
-			 * trimmed inside parse_trailer()).
-			 */
-			strbuf_addch(&last_val, '\n');
-			strbuf_addstr(&last_val, cur_trailer->raw);
-			free_trailer(cur_trailer);
-			last_trailer->value = strbuf_detach(&last_val, NULL);
-			continue;
-		}
+		x = c + 1;
+		indented_lines_found = skip_indented_lines(&x);
+		if (indented_lines_found) {
+			free_trailer(trailer);
+			raw = xstrndup(bol, x - bol);
+			trailer = parse_trailer(raw, opts->tsc->separators, 1);
+			free(raw);
+			bol = c = x;
+		} else
+			bol = ++c;
 
-		list_add_tail(&cur_trailer->list, trailer_block->trailers);
-		/*
-		 * Only allow this trailer to get added to with indented lines
-		 * in the future if it was itself a proper trailer (with a key
-		 * and separator).
-		 */
-		if (cur_trailer->type == TRAILER_OK && cur_trailer->separator)
-			last_trailer = cur_trailer;
+		list_add_tail(&trailer->list, trailer_block->trailers);
 	}
-
-	strbuf_list_free(trailer_block_lines);
 
 	trailer_block->start = trailer_block_start;
 	trailer_block->end = end_of_log_message;

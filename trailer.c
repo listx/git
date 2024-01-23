@@ -1199,6 +1199,22 @@ static size_t find_trailer_block_start(const char *buf, size_t len,
 	end_of_title = s - buf;
 
 	/*
+	 * NEEDSWORK: Simplify parsing here to use parse_trailer. Looking at a
+	 * contiguous block of text, just parse the entire contiguous region.
+	 * Then if 25% of the parsed trailer objects are TRAILER_OK or
+	 * Git-generated prefixes, the block is a trailer block. Otherwise it
+	 * does not qualify as a trailer block.
+	 *
+	 * Here's an idea: dumb down this function to just return the contiguous
+	 * block of text. Then call parse_trailer_block() on it (make that
+	 * function understand Git-generated prefixes as a new
+	 * TRAILER_GIT_GENERATED trailer type). Then just iterate over the
+	 * parsed trailers to do the 25% heuristic check. Then we don't have to
+	 * go over the same region of text twice (once in here, again in
+	 * parse_trailer_block() which currently calls this function).
+	 */
+
+	/*
 	 * Get the start of the trailers by looking starting from the end for a
 	 * blank line before a set of non-blank lines that (i) are all
 	 * trailers, or (ii) contains at least one Git-generated trailer and

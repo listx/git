@@ -162,9 +162,9 @@ static void print_tok_val(struct strbuf *out, const char *tok, const char *val)
 		strbuf_addf(out, "%s%c %s\n", tok, separators[0], val);
 }
 
-void format_trailers(const struct process_trailer_options *opts,
-		     struct list_head *trailers,
-		     struct strbuf *out)
+static void format_trailers(const struct process_trailer_options *opts,
+			    struct list_head *trailers,
+			    struct strbuf *out)
 {
 	struct list_head *pos;
 	struct trailer_item *item;
@@ -1085,9 +1085,9 @@ void trailer_info_release(struct trailer_info *info)
 	free(info->trailers);
 }
 
-static void format_trailer_info(const struct process_trailer_options *opts,
-				struct list_head *trailers,
-				struct strbuf *out)
+void format_trailer_info(const struct process_trailer_options *opts,
+			 struct list_head *trailers,
+			 struct strbuf *out)
 {
 	size_t origlen = out->len;
 	struct list_head *pos;

@@ -204,11 +204,7 @@ size_t trailer_block_start(struct trailer_block *);
  */
 size_t trailer_block_end(struct trailer_block *);
 
-/*
- * Return 1 if the trailer block had an extra newline (blank line) just before
- * it.
- */
-int blank_line_before_trailer_block(struct trailer_block *);
+int trailer_block_empty(struct trailer_block *);
 
 /*
  * Free trailer_block struct.

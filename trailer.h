@@ -162,7 +162,7 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 
 size_t trailer_block_start(struct trailer_block *);
 size_t trailer_block_end(struct trailer_block *);
-int blank_line_before_trailer_block(struct trailer_block *);
+int trailer_block_empty(struct trailer_block *);
 
 void trailer_block_release(struct trailer_block *);
 

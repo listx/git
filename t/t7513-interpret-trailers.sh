@@ -620,13 +620,13 @@ test_expect_success 'with config setup and ":=#" as separators' '
 
 test_expect_success 'with commit basic message' '
 	cat basic_message >expected &&
-	echo >>expected &&
 	git interpret-trailers <basic_message >actual &&
 	test_cmp expected actual
 '
 
 test_expect_success 'with basic patch' '
 	cat basic_message >input &&
+	echo >>input &&
 	cat basic_patch >>input &&
 	cat basic_message >expected &&
 	echo >>expected &&
@@ -807,6 +807,7 @@ test_expect_success 'with complex patch, args and --trim-empty' '
 
 test_expect_success 'in-place editing with basic patch' '
 	cat basic_message >message &&
+	echo >>message &&
 	cat basic_patch >>message &&
 	cat basic_message >expected &&
 	echo >>expected &&

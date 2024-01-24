@@ -66,12 +66,6 @@ struct trailer_block {
 	struct list_head *trailers;
 
 	/*
-	 * True if there is a blank line before the location pointed to by
-	 * "start".
-	 */
-	int blank_line_before_trailer;
-
-	/*
 	 * The locations of the start and end positions of the trailer block
 	 * found, as offsets from the beginning of the source text from which
 	 * this trailer block was parsed. If no trailer block is found, these
@@ -1255,14 +1249,6 @@ continue_outer_loop:
 	return len;
 }
 
-static int ends_with_blank_line(const char *buf, size_t len)
-{
-	ssize_t ll = last_line(buf, len);
-	if (ll < 0)
-		return 0;
-	return is_blank_line(buf + ll);
-}
-
 static void unfold_value(struct strbuf *val)
 {
 	struct strbuf out = STRBUF_INIT;
@@ -1503,8 +1489,6 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 
 	strbuf_list_free(trailer_block_lines);
 
-	trailer_block->blank_line_before_trailer = ends_with_blank_line(str,
-									trailer_block_start);
 	trailer_block->start = trailer_block_start;
 	trailer_block->end = end_of_log_message;
 
@@ -1540,9 +1524,9 @@ size_t trailer_block_end(struct trailer_block *trailer_block)
 	return trailer_block->end;
 }
 
-int blank_line_before_trailer_block(struct trailer_block *trailer_block)
+int trailer_block_empty(struct trailer_block *trailer_block)
 {
-	return trailer_block->blank_line_before_trailer;
+	return list_empty(trailer_block->trailers);
 }
 
 void trailer_block_release(struct trailer_block *trailer_block)

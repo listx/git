@@ -175,6 +175,7 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 	struct strbuf tb = STRBUF_INIT;
 	struct trailer_block *trailer_block;
 	FILE *outfile = stdout;
+	int no_trailer_block_from_input, created_new_trailer_block = 0;
 
 	read_from(file, &input);
 
@@ -183,17 +184,31 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 
 	trailer_block = parse_trailer_block(opts, input.buf);
 
+	if (!opts->only_input) {
+		no_trailer_block_from_input = trailer_block_empty(trailer_block);
+		apply_trailer_templates(templates, trailer_block);
+		created_new_trailer_block = no_trailer_block_from_input &&
+			!trailer_block_empty(trailer_block);
+	}
+
 	/* Print the lines before the trailer block */
 	if (!opts->only_trailers)
 		fwrite(input.buf, 1, trailer_block_start(trailer_block), outfile);
 
-	if (!opts->only_trailers && !blank_line_before_trailer_block(trailer_block))
+	/*
+	 * Recall that a trailer block must be preceded by a blank line. If the
+	 * input had an existing trailer block which we could reuse, then the
+	 * "Print the lines before trailer block" above would have already
+	 * printed such a line.
+	 *
+	 * But if the original input did not have any trailer block and we
+	 * created a new trailer block of our own, we would have to ensure that
+	 * it is preceded by this blank line (because parse_trailer_block() only
+	 * parses the trailers inside the block and doesn't print any blank
+	 * lines of its own).
+	 */
+	if (created_new_trailer_block)
 		fprintf(outfile, "\n");
-
-
-	if (!opts->only_input) {
-		apply_trailer_templates(templates, trailer_block);
-	}
 
 	/* Print trailer block. */
 	format_trailer_block(opts, trailer_block, &tb);
@@ -202,15 +217,15 @@ static void interpret_trailers(const struct trailer_processing_options *opts,
 
 	/* Print the lines after the trailer block as is */
 	if (!opts->only_trailers)
-		fwrite(input.buf + trailer_block_end(trailer_block),
-		       1, input.len - trailer_block_end(trailer_block), outfile);
+		fwrite(input.buf + trailer_block_end(trailer_block), 1,
+		       input.len - trailer_block_end(trailer_block), outfile);
+
 	trailer_block_release(trailer_block);
+	strbuf_release(&input);
 
 	if (opts->in_place)
 		if (rename_tempfile(&trailers_tempfile, file))
 			die_errno(_("could not rename temporary file to %s"), file);
-
-	strbuf_release(&input);
 }
 
 int cmd_interpret_trailers(int argc, const char **argv, const char *prefix)

@@ -1008,6 +1008,43 @@ test_expect_success 'using "where = before" and --trim-empty' '
 	test_cmp expected actual
 '
 
+# Can't add duplicate trailers consecutively because of addIfDifferentNeighbor
+# (default), because we only check duplicates next to where we want to add the
+# trailer with "--where". When we do change the position of where we want to add
+# the trailer though, we can end up adding the duplicate because we only look at
+# the neighboring trailers. So here, "signer" gets added twice because we tweak
+# "--where".
+test_expect_success 'addIfDifferentNeighbor means no consecutive duplicates' '
+	test_config trailer.fix.key "Fixes" &&
+	test_config trailer.ack.key "Acked-by" &&
+	test_config trailer.review.key "Reviewed-by" &&
+	test_config trailer.sign.key "Signed-off-by" &&
+	cat complex_message_body >expected &&
+	sed -e "s/ Z\$/ /" >>expected <<-\EOF &&
+		Acked-by: acker
+		Fixes: Z
+		Fixes: fixer
+		Acked-by: Z
+		Reviewed-by: reviewer
+		Reviewed-by: Z
+		Signed-off-by: signer
+		Signed-off-by: Z
+		Signed-off-by: signer
+	EOF
+	git interpret-trailers \
+		--where=after   --trailer fix=fixer \
+		--where=after   --trailer fix=fixer \
+		--where=before  --trailer review=reviewer \
+		--where=before  --trailer review=reviewer \
+		--where=start   --trailer ack=acker \
+		--where=start   --trailer ack=acker \
+		--where=end     --trailer sign=signer \
+		--where=end     --trailer sign=signer \
+		--where=before  --trailer sign=signer \
+		<complex_message >actual &&
+	test_cmp expected actual
+'
+
 test_expect_success 'the default is "ifExists = addIfDifferentNeighbor"' '
 	test_config trailer.ack.key "Acked-by= " &&
 	test_config trailer.ack.where "after" &&

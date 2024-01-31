@@ -7,6 +7,7 @@
 #include "commit.h"
 #include "trailer.h"
 #include "list.h"
+#include "hex.h"
 /*
  * Copyright (c) 2013, 2014 Christian Couder <chriscool@tuxfamily.org>
  */
@@ -135,6 +136,8 @@ struct trailer {
 	struct list_head list;
 	char *raw;
 	enum trailer_type type;
+	int git_generated;
+	char wrapper;
 	char *key;
 	int space_before_separator;
 	char separator;
@@ -897,6 +900,46 @@ static int skip_indented_lines(const char **c)
 }
 
 /*
+ * Parse a line like "(cherry picked from commit ...)" where "..." is a
+ * 40-character hex string. We return the hex string that was parsed as a newly
+ * allocated string.
+ */
+static int parse_cherry_picked_from_commit(const char *s,
+					   struct trailer *trailer)
+{
+	const char *c = s;
+	struct object_id oid;
+	const char **end = &c;
+	const char prefix[28] = "(cherry picked from commit ";
+
+	if (!starts_with(c, prefix))
+		return 0;
+	c += 27;
+
+	if (parse_oid_hex(c, &oid, end))
+		return 0;
+
+	if (*c != ')')
+		return 0;
+	c += 1;
+
+	if (*c != '\0')
+		return 0;
+	c -= 41;
+
+	trailer->type = TRAILER_OK;
+	trailer->git_generated = 1;
+	trailer->wrapper = '(';
+	free(trailer->key);
+	trailer->key = xstrdup("cherry picked from commit");
+	trailer->separator = ' ';
+	free(trailer->value);
+	trailer->value = xstrndup(c, 40);
+
+	return 1;
+}
+
+/*
  * Parse text for a key and separator.
  *
  * The parameter "leading_whitespace_ends_parse" is used to parse indented text
@@ -949,6 +992,9 @@ struct trailer *parse_trailer(const char *s,
 		trailer->type = TRAILER_COMMENT;
 		return trailer;
 	}
+
+	if (parse_cherry_picked_from_commit(s, trailer))
+		return trailer;
 
 	leading_whitespace = skip_whitespace(&c);
 
@@ -1320,6 +1366,15 @@ continue_outer_loop:
 	return len;
 }
 
+static void format_trailer_key(const struct trailer *trailer,
+			       struct strbuf *out)
+{
+	if (trailer->wrapper == '(')
+		strbuf_addch(out, '(');
+
+	strbuf_addstr(out, trailer->key);
+}
+
 /*
  * Formatting the separator depends on the key, because the key may be
  * configured to come with its own separator.
@@ -1397,6 +1452,9 @@ static void format_trailer_value(const struct trailer *trailer,
 		strbuf_addbuf(out, &val);
 	} else
 		strbuf_addstr(out, trailer->value);
+
+	if (trailer->wrapper == '(')
+		strbuf_addch(out, ')');
 }
 
 static void format_ok_trailer(const struct trailer *trailer,
@@ -1404,11 +1462,11 @@ static void format_ok_trailer(const struct trailer *trailer,
 			      struct strbuf *out)
 {
 	if (opts->key_only)
-		strbuf_addstr(out, trailer->key);
+		format_trailer_key(trailer, out);
 	else if (opts->value_only)
 		format_trailer_value(trailer, opts, out);
 	else {
-		strbuf_addstr(out, trailer->key);
+		format_trailer_key(trailer, out);
 		format_trailer_value(trailer, opts, out);
 	}
 }

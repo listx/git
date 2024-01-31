@@ -118,7 +118,6 @@ enum trailer_type {
 	 *                and so "foo" could be a key but then "$bar" is junk)
 	 *   - ":"       (sep found, but no key)
 	 *   - ":val"    (sep found, but no key)
-	 *   - "(cherry picked from commit 00000000)" (Git-generated line)
 	 *
 	 * NEEDSWORK: Make the "(cherry picked ...)" Git-generated line be
 	 * parsed as TRAILER_OK with key "cherry picked from commit" and
@@ -138,10 +137,12 @@ enum trailer_type {
 	 *   - "key: "    (key and sep)
 	 *   - "key #"    (key and sep)
 	 *   - "foo: bar" (key and sep and value)
-	 *   - "Signed-off-by: " (key and sep; also a Git-generated line)
+	 *   - "(cherry picked from commit ...)" (Git-generated)
+	 *   - "Signed-off-by: ..." (key and sep; could be Git-generated)
 	 *
 	 * NOTE: The separator is hardcoded to be ":". But it can be overridden
-	 * with configuration.
+	 * with configuration. For Git-generated trailers, their parsing rules
+	 * are very strict; for example, see parse_cherry_picked_from_commit().
 	 */
 	TRAILER_OK,
 };

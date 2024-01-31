@@ -229,14 +229,14 @@ test_expect_success 'with non-trailer lines mixed with cherry picked from' '
 
 		this is not a trailer
 		this is not a trailer
-		(cherry picked from commit x)
+		(cherry picked from commit 0000000000000000000000000000000000000000)
 		this is not a trailer
 	EOF
 	cat >expected <<-\EOF &&
 
 		this is not a trailer
 		this is not a trailer
-		(cherry picked from commit x)
+		(cherry picked from commit 0000000000000000000000000000000000000000)
 		this is not a trailer
 		token: value
 	EOF

@@ -939,6 +939,48 @@ static int parse_cherry_picked_from_commit(const char *s,
 	return 1;
 }
 
+static int parse_signed_off_by(const char *s,
+			       struct trailer *trailer)
+{
+	const char *c = s;
+	int value_found = 0;
+	const char prefix[16] = "Signed-off-by: ";
+
+	if (!starts_with(c, prefix))
+		return 0;
+	c += 15;
+
+	while (*c) {
+		c++;
+		value_found = 1;
+	}
+
+	/*
+	 * Git never generates empty-value Signed-off-by lines, so empty values
+	 * fail the parse.
+	 */
+	if (!value_found)
+		return 0;
+
+	/*
+	 * Trim trailing newlines out of the value, because newlines have a
+	 * special meaning for the trailer subsystem.
+	 */
+	if (value_found)
+		while (*(c - 1) == '\n') c--;
+
+	trailer->type = TRAILER_OK;
+	trailer->git_generated = 1;
+	free(trailer->key);
+	trailer->key = xstrdup("Signed-off-by");
+	trailer->separator = ':';
+	trailer->space_after_separator = 1;
+	free(trailer->value);
+	trailer->value = xstrndup(s + 15, c - (s + 15));
+
+	return 1;
+}
+
 /*
  * Parse text for a key and separator.
  *
@@ -1628,10 +1670,14 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 			free_trailer(trailer);
 			raw = xstrndup(bol, x - bol);
 			trailer = parse_trailer(raw, opts->tsc->separators, 1);
-			free(raw);
 			bol = c = x;
-		} else
+		} else {
+			raw = xstrndup(bol, eol - bol);
 			bol = ++c;
+		}
+
+		parse_signed_off_by(raw, trailer);
+		free(raw);
 
 		list_add_tail(&trailer->list, trailer_block->trailers);
 	}

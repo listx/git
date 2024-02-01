@@ -188,8 +188,11 @@ enum trailer_type get_trailer_type(struct trailer *);
 struct trailer_conf *get_matching_trailer_conf(const struct trailer_subsystem_conf *,
 					       const struct trailer *);
 
+struct trailer_block *trailer_block_new(void);
 struct trailer_block *parse_trailer_block(const struct trailer_processing_options *,
 					  const char *str);
+int maybe_new_trailer_block(struct list_head *templates,
+			    struct trailer_block *);
 
 /*
  * Return the offset of the start of the trailer block. That is, 0 is the start
@@ -206,6 +209,7 @@ size_t trailer_block_start(struct trailer_block *);
 size_t trailer_block_end(struct trailer_block *);
 
 int trailer_block_empty(struct trailer_block *);
+int trailer_block_growable(struct trailer_block *);
 
 /*
  * Free trailer_block struct.

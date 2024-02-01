@@ -168,12 +168,6 @@ const char *trailer_default_separators(struct trailer_subsystem_conf *tsc)
 
 #define TRAILER_ARG_STRING "$ARG"
 
-static const char *git_generated_prefixes[] = {
-	"Signed-off-by: ",
-	"(cherry picked from commit ",
-	NULL
-};
-
 /* Iterate over the elements of the list. */
 #define list_for_each_dir(pos, head, is_reverse) \
 	for (pos = is_reverse ? (head)->prev : (head)->next; \
@@ -851,35 +845,6 @@ static int key_matches_template(const char *key,
 	return template->conf.key ? !strncasecmp(key, template->conf.key, key_len) : 0;
 }
 
-/*
- * If the given line is of the form
- * "<key><optional whitespace><separator>..." or "<separator>...", return the
- * location of the separator. Otherwise, return -1.  The optional whitespace
- * is allowed there primarily to allow things like "Bug #43" where <key> is
- * "Bug" and <separator> is "#".
- *
- * The separator-starts-line case (in which this function returns 0) is
- * distinguished from the non-well-formed-line case (in which this function
- * returns -1) because some callers of this function need such a distinction.
- */
-ssize_t find_separator(const char *trailer_string, const char *separators)
-{
-	int whitespace_found = 0;
-	const char *c;
-	for (c = trailer_string; *c; c++) {
-		if (strchr(separators, *c))
-			return c - trailer_string;
-		if (!whitespace_found && (isalnum(*c) || *c == '-'))
-			continue;
-		if (c != trailer_string && (*c == ' ' || *c == '\t')) {
-			whitespace_found = 1;
-			continue;
-		}
-		break;
-	}
-	return -1;
-}
-
 static int skip_whitespace(const char **c)
 {
 	int whitespace_found = 0;
@@ -1316,24 +1281,15 @@ static size_t find_end_of_log_message(const char *input, int no_divider)
 }
 
 /*
- * Return the position of the first trailer line or len if there are no
- * trailers.
+ * Return the start of a possible trailer block (contiguous region of text with
+ * nonblank lines preceded by a blank line), or len if no such region was found.
  */
-static size_t find_trailer_block_start(const char *buf, size_t len,
-				       struct trailer_subsystem_conf *tsc)
+static size_t maybe_trailer_block_start(const char *buf, size_t len,
+					struct trailer_subsystem_conf *tsc)
 {
 	const char *s;
 	ssize_t end_of_title, l;
-	int only_spaces = 1;
-	int recognized_prefix = 0, trailer_lines = 0, non_trailer_lines = 0;
-	/*
-	 * Number of possible continuation lines encountered. This will be
-	 * reset to 0 if we encounter a trailer (since those lines are to be
-	 * considered continuations of that trailer), and added to
-	 * non_trailer_lines if we encounter a non-trailer (since those lines
-	 * are to be considered non-trailers).
-	 */
-	int possible_continuation_lines = 0;
+	int nonblank_found = 0;
 
 	/* The first paragraph is the title and cannot be trailers */
 	for (s = buf; s < buf + len; s = next_line(s)) {
@@ -1345,77 +1301,19 @@ static size_t find_trailer_block_start(const char *buf, size_t len,
 	end_of_title = s - buf;
 
 	/*
-	 * Get the start of the trailers by looking starting from the end for a
-	 * blank line before a set of non-blank lines that (i) are all
-	 * trailers, or (ii) contains at least one Git-generated trailer and
-	 * consists of at least 25% configured trailers.
+	 * Get the start of the trailer block by looking starting from the end
+	 * for a blank line before a set of non-blank lines.
 	 */
 	for (l = last_line(buf, len);
 	     l >= end_of_title;
 	     l = last_line(buf, l)) {
 		const char *bol = buf + l;
-		const char **p;
-		ssize_t separator_pos;
 
-		if (bol[0] == comment_line_char) {
-			non_trailer_lines += possible_continuation_lines;
-			possible_continuation_lines = 0;
-			continue;
-		}
 		if (is_blank_line(bol)) {
-			if (only_spaces)
-				continue;
-			non_trailer_lines += possible_continuation_lines;
-			if (recognized_prefix &&
-			    trailer_lines * 3 >= non_trailer_lines)
+			if (nonblank_found)
 				return next_line(bol) - buf;
-			else if (trailer_lines && !non_trailer_lines)
-				return next_line(bol) - buf;
-			return len;
-		}
-		only_spaces = 0;
-
-		for (p = git_generated_prefixes; *p; p++) {
-			if (starts_with(bol, *p)) {
-				trailer_lines++;
-				possible_continuation_lines = 0;
-				recognized_prefix = 1;
-				goto continue_outer_loop;
-			}
-		}
-
-		separator_pos = find_separator(bol, tsc->separators);
-		if (separator_pos >= 1 && !isspace(bol[0])) {
-			struct list_head *pos;
-
-			trailer_lines++;
-			possible_continuation_lines = 0;
-			if (recognized_prefix)
-				continue;
-			/*
-			 * The templates here are not used for actually
-			 * adding trailers anywhere, but instead to help us
-			 * identify trailer lines by comparing their keys with
-			 * those found in configured templates.
-			 */
-			list_for_each(pos, tsc->templates) {
-				struct trailer_template *template;
-				template = list_entry(pos, struct trailer_template, list);
-				if (key_matches_template(bol, template,
-							 separator_pos)) {
-					recognized_prefix = 1;
-					break;
-				}
-			}
-		} else if (isspace(bol[0]))
-			possible_continuation_lines++;
-		else {
-			non_trailer_lines++;
-			non_trailer_lines += possible_continuation_lines;
-			possible_continuation_lines = 0;
-		}
-continue_outer_loop:
-		;
+		} else
+			nonblank_found = 1;
 	}
 
 	return len;
@@ -1606,7 +1504,7 @@ void format_trailer_block(const struct trailer_processing_options *opts,
 	}
 }
 
-static struct trailer_block *trailer_block_new(void)
+struct trailer_block *trailer_block_new(void)
 {
 	struct trailer_block *trailer_block = xcalloc(1, sizeof(*trailer_block));
 	trailer_block->trailers = xcalloc(1, sizeof(*trailer_block->trailers));
@@ -1623,15 +1521,23 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 	const char *bol, *eol, *c, *x;
 	int indented_lines_found;
 	char *raw;
+	size_t num_total = 0, num_configured = 0, num_ok = 0;
+	struct list_head *pos;
 
 	trailer_block->end = find_end_of_log_message(str, opts->no_divider);
-	trailer_block->start = find_trailer_block_start(str, trailer_block->end,
-							opts->tsc);
+	trailer_block->start = maybe_trailer_block_start(str,
+							 trailer_block->end,
+							 opts->tsc);
 
 	/*
 	 * Parse all lines in the trailer block. Note that we treat both trailer
 	 * strings and non-trailer strings as "trailers", by creating a
 	 * "trailer" for each one.
+	 *
+	 * If we end up parsing 25% or more of these lines as TRAILER_OK, mark
+	 * it as "growable". If a trailer block is not growable, then the caller
+	 * is expected to create a new block for adding trailers instead of
+	 * adding into the (ungrowable) existing one.
 	 */
 	bol = c = str + trailer_block->start;
 	while (*c && c < (str + trailer_block->end)) {
@@ -1662,21 +1568,53 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 			continue;
 		}
 
-		if (trailer->type != TRAILER_OK) {
+		if (trailer->git_generated) {
 			list_add_tail(&trailer->list, trailer_block->trailers);
+			num_total++;
+			num_configured++;
+			num_ok++;
 			bol = ++c;
 			continue;
 		}
 
 		/*
-		 * If we are looking at a regular trailer, then seek past any
-		 * number of additional lines that all start with an indented
-		 * line. This way, we can feed in a multiline raw string to
-		 * parse_trailer() to parse a multiline trailer (because it can
-		 * already handle multiline input). If we didn't do this, we'd
-		 * have to make indented lines add their contents back to a
-		 * previously-parsed trailer, which would make this parser that
-		 * much more complicated.
+		 * This will happen if we start the block with an indented line.
+		 * Treat this as junk. All properly folded indented lines are
+		 * taken care of in bulk for the TRAILER_OK case at the bottom.
+		 */
+		if (trailer->type == TRAILER_INDENTED)
+			trailer->type = TRAILER_JUNK;
+
+		/*
+		 * This will happen if a key-like string was found, but which
+		 * had no separator. While this works for parsing single words
+		 * (for example "--trailer foo" in interpret-trailers.c), when
+		 * parsing a trailer inside a trailer block we require a
+		 * separator to exist on the same line as the one which includes
+		 * the key.
+		 */
+		if (trailer->type == TRAILER_OK && trailer->separator == '\0')
+			trailer->type = TRAILER_JUNK;
+
+		if (trailer->type == TRAILER_JUNK) {
+			list_add_tail(&trailer->list, trailer_block->trailers);
+			num_total++;
+			bol = ++c;
+			continue;
+		}
+
+		if (trailer->type != TRAILER_OK)
+			BUG("trailer.c: unhandled trailer type %d", trailer->type);
+
+		/*
+		 * If we are looking at a regular trailer (TRAILER_OK), then
+		 * seek past any number of additional lines that all start with
+		 * an indented line. This way, we can feed in a multiline raw
+		 * string to parse_trailer() to parse a multiline trailer
+		 * (because it can already handle multiline input). If we didn't
+		 * do this, we'd have to make indented lines add their contents
+		 * back to a previously-parsed trailer, which would make this
+		 * parser that much more complicated.
 		 */
 		x = c + 1;
 		indented_lines_found = skip_indented_lines(&x);
@@ -1691,12 +1629,76 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 		}
 
 		parse_signed_off_by(raw, trailer);
+		if (trailer->git_generated)
+			num_configured++;
+		else {
+			/*
+			 * Check if we can recognize this trailer from the given
+			 * trailer templates.
+			 */
+			list_for_each(pos, opts->tsc->templates) {
+				struct trailer_template *template;
+				template = list_entry(pos, struct trailer_template, list);
+				if (key_matches_template(trailer->key, template,
+							strlen(trailer->key))) {
+					num_configured++;
+					break;
+				}
+			}
+		}
 		free(raw);
 
 		list_add_tail(&trailer->list, trailer_block->trailers);
+		num_total++;
+		num_ok++;
 	}
 
+	/*
+	 * A trailer block is considered "growable" only if it is empty or if it
+	 * passes the 25% heuristic, as below.
+	 */
+	if (num_total == num_ok)
+		trailer_block->growable = 1;
+	else if (num_configured && num_ok * 4 >= num_total)
+		trailer_block->growable = 1;
+	else
+		trailer_block->growable = 0;
+
 	return trailer_block;
+}
+
+/*
+ * Return 1 if we ended up allocating a new trailer block to grow it with
+ * templates, instead of growing the existing (given) trailer block.
+ */
+int maybe_new_trailer_block(struct list_head *templates,
+			    struct trailer_block *trailer_block)
+{
+	size_t existing_block_end;
+
+	if (trailer_block_empty(trailer_block)) {
+		apply_trailer_templates(templates, trailer_block);
+		return !trailer_block_empty(trailer_block);
+	}
+
+	if (trailer_block->growable) {
+		apply_trailer_templates(templates, trailer_block);
+		return 0;
+	}
+
+	existing_block_end = trailer_block_end(trailer_block);
+	trailer_block_release(trailer_block);
+	trailer_block = trailer_block_new();
+
+	/*
+	 * Start the new trailer after the existing one (because we couldn't use
+	 * the existing one).
+	 */
+	trailer_block->start = existing_block_end;
+	trailer_block->end = existing_block_end;
+
+	apply_trailer_templates(templates, trailer_block);
+	return !trailer_block_empty(trailer_block);
 }
 
 void free_trailers(struct list_head *trailers)
@@ -1726,6 +1728,11 @@ size_t trailer_block_start(struct trailer_block *trailer_block)
 size_t trailer_block_end(struct trailer_block *trailer_block)
 {
 	return trailer_block->end;
+}
+
+int trailer_block_growable(struct trailer_block *trailer_block)
+{
+	return trailer_block->growable;
 }
 
 int trailer_block_empty(struct trailer_block *trailer_block)
@@ -1769,7 +1776,13 @@ struct trailer_iter *trailer_iter_init(const char *msg)
 	opts.no_divider = 1;
 	iter->tsc = trailer_subsystem_init();
 	opts.tsc = iter->tsc;
+
 	iter->trailer_block = parse_trailer_block(&opts, msg);
+	if (!iter->trailer_block->growable) {
+		trailer_block_release(iter->trailer_block);
+		iter->trailer_block = trailer_block_new();
+	}
+
 	iter->cur = iter->trailer_block->trailers->next;
 
 	return iter;

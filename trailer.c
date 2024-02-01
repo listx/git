@@ -1605,22 +1605,22 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 					  const char *str)
 {
 	struct trailer_block *trailer_block = trailer_block_new();
-	size_t end_of_log_message = 0, trailer_block_start = 0;
 	struct trailer *trailer = NULL;
 	const char *bol, *eol, *c, *x;
 	int indented_lines_found;
 	char *raw;
 
-	end_of_log_message = find_end_of_log_message(str, opts->no_divider);
-	trailer_block_start = find_trailer_block_start(str, end_of_log_message, opts->tsc);
+	trailer_block->end = find_end_of_log_message(str, opts->no_divider);
+	trailer_block->start = find_trailer_block_start(str, trailer_block->end,
+							opts->tsc);
 
 	/*
 	 * Parse all lines in the trailer block. Note that we treat both trailer
 	 * strings and non-trailer strings as "trailers", by creating a
 	 * "trailer" for each one.
 	 */
-	bol = c = str + trailer_block_start;
-	while (*c && c < (str + end_of_log_message)) {
+	bol = c = str + trailer_block->start;
+	while (*c && c < (str + trailer_block->end)) {
 		/*
 		 * Point "eol" to the end of the current line.
 		 */
@@ -1681,9 +1681,6 @@ struct trailer_block *parse_trailer_block(const struct trailer_processing_option
 
 		list_add_tail(&trailer->list, trailer_block->trailers);
 	}
-
-	trailer_block->start = trailer_block_start;
-	trailer_block->end = end_of_log_message;
 
 	return trailer_block;
 }

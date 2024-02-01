@@ -67,6 +67,14 @@ struct trailer_block {
 	struct list_head *trailers;
 
 	/*
+	 * True if it passes 25% heuristic (we will add new trailers into this
+	 * block only if the block's trailer objects are at least 25%
+	 * TRAILER_OK). Otherwise, we'll have to create a separate trailer
+	 * block.
+	 */
+	int growable;
+
+	/*
 	 * The locations of the start and end positions of the trailer block
 	 * found, as offsets from the beginning of the source text from which
 	 * this trailer block was parsed. If no trailer block is found, these
@@ -500,6 +508,11 @@ void apply_trailer_templates(struct list_head *templates,
 {
 	struct list_head *pos, *p;
 	struct trailer_template *template;
+
+	if (!trailer_block->growable) {
+		error("cannot apply templates to ungrowable block");
+		return;
+	}
 
 	list_for_each_safe(pos, p, templates) {
 		struct trailer *existing_trailer = NULL;
@@ -1598,6 +1611,7 @@ static struct trailer_block *trailer_block_new(void)
 	struct trailer_block *trailer_block = xcalloc(1, sizeof(*trailer_block));
 	trailer_block->trailers = xcalloc(1, sizeof(*trailer_block->trailers));
 	INIT_LIST_HEAD(trailer_block->trailers);
+	trailer_block->growable = 1;
 	return trailer_block;
 }
 

@@ -244,6 +244,147 @@ test_expect_success 'with non-trailer lines mixed with cherry picked from' '
 	test_cmp expected actual
 '
 
+# The "trailer block" here is actually just junk because the "cherry picked from
+# commit" lines don't actually have any oids (hex strings) in them. So if we add
+# a new trailer, don't reuse the junk block and start off with a new (separate)
+# trailer block separate from the junk block.
+test_expect_success 'with obviously wrong cherry picked from' '
+	cat >patch <<-\EOF &&
+
+		(cherry picked from commit ???????????
+		(cherry picked from commit THIS
+		(cherry picked from commit IS
+		(cherry picked from commit JUNK
+		(cherry picked from commit ???????????
+	EOF
+	cat >expected <<-\EOF &&
+
+		(cherry picked from commit ???????????
+		(cherry picked from commit THIS
+		(cherry picked from commit IS
+		(cherry picked from commit JUNK
+		(cherry picked from commit ???????????
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# Detect cases where the trailer block looks correct for a human but is
+# definitely not Git-generated (39 hex characters instead of 40).
+test_expect_success 'with subtly wrong cherry picked from (39 hex chars)' '
+	cat >patch <<-\EOF &&
+
+		(cherry picked from commit 000000000100000000020000000003000000000)
+	EOF
+	cat >expected <<-\EOF &&
+
+		(cherry picked from commit 000000000100000000020000000003000000000)
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# We got 40 hex characters, but one of them is 'G' (invalid hex char).
+test_expect_success 'with subtly wrong cherry picked from (invalid hex char)' '
+	cat >patch <<-\EOF &&
+
+		(cherry picked from commit 8de00f35d3a944e15b6fe4057ca5G6c1ac5bc496)
+	EOF
+	cat >expected <<-\EOF &&
+
+		(cherry picked from commit 8de00f35d3a944e15b6fe4057ca5G6c1ac5bc496)
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# We got 40 hex characters, but there is an extra space between the word
+# "commit" and the start of the hex character.
+test_expect_success 'with subtly wrong cherry picked from (extra space)' '
+	cat >patch <<-\EOF &&
+
+		(cherry picked from commit  0000000001000000000200000000030000000004)
+	EOF
+	cat >expected <<-\EOF &&
+
+		(cherry picked from commit  0000000001000000000200000000030000000004)
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# We got 40 hex characters, but there is a trailing period.
+test_expect_success 'with subtly wrong cherry picked from (trailing period)' '
+	cat >patch <<-\EOF &&
+
+		(cherry picked from commit 0000000001000000000200000000030000000004).
+	EOF
+	cat >expected <<-\EOF &&
+
+		(cherry picked from commit 0000000001000000000200000000030000000004).
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# We got 40 hex characters, but the trailer is folded over multiple lines. We
+# use q_to_space so that if you save this file, your editor won't accidentally
+# trim the trailing space character after the word "commit".
+test_expect_success 'with subtly wrong cherry picked from (folded)' '
+	q_to_space >patch <<-\EOF &&
+
+		(cherry picked from commitQ
+		  0000000001000000000200000000030000000004)
+	EOF
+	q_to_space >expected <<-\EOF &&
+
+		(cherry picked from commitQ
+		  0000000001000000000200000000030000000004)
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
+# We got 1 properly formatted "(cherry picked ..." line. The next 5 lines are
+# also correct, except for the indent. These 5 indented lines invalidate the
+# whole block (Git would never generate such indented lines).
+test_expect_success 'with subtly wrong cherry picked from (wrongly indented lines)' '
+	q_to_tab >patch <<-\EOF &&
+
+		(cherry picked from commit 0000000001000000000200000000030000000004)
+		Q(cherry picked from commit a000000001000000000200000000030000000004)
+		Q(cherry picked from commit b000000001000000000200000000030000000004)
+		Q(cherry picked from commit c000000001000000000200000000030000000004)
+		Q(cherry picked from commit d000000001000000000200000000030000000004)
+		Q(cherry picked from commit e000000001000000000200000000030000000004)
+	EOF
+	q_to_tab >expected <<-\EOF &&
+
+		(cherry picked from commit 0000000001000000000200000000030000000004)
+		Q(cherry picked from commit a000000001000000000200000000030000000004)
+		Q(cherry picked from commit b000000001000000000200000000030000000004)
+		Q(cherry picked from commit c000000001000000000200000000030000000004)
+		Q(cherry picked from commit d000000001000000000200000000030000000004)
+		Q(cherry picked from commit e000000001000000000200000000030000000004)
+
+		token: value
+	EOF
+	git interpret-trailers --trailer "token: value" patch >actual &&
+	test_cmp expected actual
+'
+
 test_expect_success 'with non-trailer lines mixed with a configured trailer' '
 	cat >patch <<-\EOF &&
 

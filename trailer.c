@@ -1126,6 +1126,7 @@ static void format_trailer_info(const struct process_trailer_options *opts,
 			if (opts->separator && out->len != origlen) {
 				strbuf_addbuf(out, opts->separator);
 			}
+			/* Print non-trailer line as is. */
 			strbuf_addstr(out, trailer);
 			if (opts->separator) {
 				strbuf_rtrim(out);

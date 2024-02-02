@@ -1053,9 +1053,9 @@ void trailer_info_release(struct trailer_info *info)
 	free(info->trailers);
 }
 
-void format_trailer_info(const struct process_trailer_options *opts,
-			 struct list_head *trailers,
-			 struct strbuf *out)
+void format_trailers(const struct process_trailer_options *opts,
+		     struct list_head *trailers,
+		     struct strbuf *out)
 {
 	size_t origlen = out->len;
 	struct list_head *pos;
@@ -1131,7 +1131,7 @@ void format_trailers_from_commit(const struct process_trailer_options *opts,
 		strbuf_add(out, msg + info.trailer_block_start,
 			   info.trailer_block_end - info.trailer_block_start);
 	} else
-		format_trailer_info(opts, &trailers, out);
+		format_trailers(opts, &trailers, out);
 
 	free_trailers(&trailers);
 	trailer_info_release(&info);

@@ -1148,11 +1148,9 @@ void format_trailers_from_commit(const struct process_trailer_options *opts,
 	    !opts->key_value_separator) {
 		strbuf_add(out, msg + info.trailer_block_start,
 			   info.trailer_block_end - info.trailer_block_start);
-		trailer_info_release(&info);
-		return;
-	}
+	} else
+		format_trailer_info(opts, &info, out);
 
-	format_trailer_info(opts, &info, out);
 	trailer_info_release(&info);
 }
 

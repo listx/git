@@ -1149,13 +1149,12 @@ void trailer_iterator_init(struct trailer_iterator *iter, const char *msg)
 
 int trailer_iterator_advance(struct trailer_iterator *iter)
 {
-	while (iter->internal.cur < iter->internal.info.trailer_nr) {
+	if (iter->internal.cur < iter->internal.info.trailer_nr) {
 		char *line = iter->internal.info.trailers[iter->internal.cur++];
 		int separator_pos = find_separator(line, separators);
+		iter->is_trailer = (separator_pos > 0);
 
-		if (separator_pos < 1)
-			continue; /* not a real trailer */
-
+		iter->raw = line;
 		strbuf_reset(&iter->key);
 		strbuf_reset(&iter->val);
 		parse_trailer(&iter->key, &iter->val, NULL,

@@ -100,7 +100,7 @@ void trailer_info_get(struct trailer_info *info, const char *str,
 void trailer_info_release(struct trailer_info *info);
 
 void trailer_config_init(void);
-void format_trailer_info(const struct process_trailer_options *opts,
+void format_trailers(const struct process_trailer_options *opts,
 		     struct list_head *trailers,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);

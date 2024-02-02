@@ -144,24 +144,6 @@ static char last_non_space_char(const char *s)
 	return '\0';
 }
 
-static void print_tok_val(struct strbuf *out, const char *tok, const char *val)
-{
-	char c;
-
-	if (!tok) {
-		strbuf_addf(out, "%s\n", val);
-		return;
-	}
-
-	c = last_non_space_char(tok);
-	if (!c)
-		return;
-	if (strchr(separators, c))
-		strbuf_addf(out, "%s%s\n", tok, val);
-	else
-		strbuf_addf(out, "%s%c %s\n", tok, separators[0], val);
-}
-
 static struct trailer_item *trailer_from_arg(struct arg_item *arg_tok)
 {
 	struct trailer_item *new_item = xcalloc(1, sizeof(*new_item));
@@ -1104,8 +1086,13 @@ void format_trailer_info(const struct process_trailer_options *opts,
 				if (!opts->key_only && !opts->value_only) {
 					if (opts->key_value_separator)
 						strbuf_addbuf(out, opts->key_value_separator);
-					else
-						strbuf_addstr(out, ": ");
+					else {
+						char c = last_non_space_char(tok.buf);
+						if (c) {
+							if (!strchr(separators, c))
+								strbuf_addf(out, "%c ", separators[0]);
+						}
+					}
 				}
 				if (!opts->key_only)
 					strbuf_addbuf(out, &val);

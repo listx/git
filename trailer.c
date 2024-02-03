@@ -1270,7 +1270,6 @@ int trailer_iterator_advance(struct trailer_iterator *iter)
 		strbuf_reset(&iter->val);
 		parse_trailer(&iter->key, &iter->val, NULL,
 			      trailer, separator_pos);
-		unfold_value(&iter->val);
 		return 1;
 	}
 	return 0;

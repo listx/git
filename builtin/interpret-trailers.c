@@ -45,18 +45,6 @@ static int option_parse_if_missing(const struct option *opt,
 	return trailer_set_if_missing(opt->value, arg);
 }
 
-static void free_new_trailers(struct list_head *trailers)
-{
-	struct list_head *pos, *tmp;
-	struct new_trailer_item *item;
-
-	list_for_each_safe(pos, tmp, trailers) {
-		item = list_entry(pos, struct new_trailer_item, list);
-		list_del(pos);
-		free(item);
-	}
-}
-
 static int option_parse_trailer(const struct option *opt,
 				   const char *arg, int unset)
 {

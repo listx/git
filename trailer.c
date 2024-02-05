@@ -68,6 +68,11 @@ static LIST_HEAD(conf_head);
 
 static const char *separators = ":";
 
+const char *trailer_default_separators(void)
+{
+	return separators;
+}
+
 static int configured;
 
 #define TRAILER_ARG_STRING "$ARG"
@@ -426,6 +431,29 @@ int trailer_set_if_missing(enum trailer_if_missing *item, const char *value)
 	return 0;
 }
 
+void trailer_set_conf_where(enum trailer_where where,
+			    struct trailer_conf *conf)
+{
+	conf->where = where;
+}
+
+void trailer_set_conf_if_exists(enum trailer_if_exists if_exists,
+				struct trailer_conf *conf)
+{
+	conf->if_exists = if_exists;
+}
+
+void trailer_set_conf_if_missing(enum trailer_if_missing if_missing,
+				 struct trailer_conf *conf)
+{
+	conf->if_missing = if_missing;
+}
+
+struct trailer_conf *new_trailer_conf(void)
+{
+	 return xcalloc(1, sizeof(struct trailer_conf));
+}
+
 void duplicate_trailer_conf(struct trailer_conf *dst,
 			    const struct trailer_conf *src)
 {
@@ -434,6 +462,15 @@ void duplicate_trailer_conf(struct trailer_conf *dst,
 	dst->key = xstrdup_or_null(src->key);
 	dst->command = xstrdup_or_null(src->command);
 	dst->cmd = xstrdup_or_null(src->cmd);
+}
+
+void free_trailer_conf(struct trailer_conf *conf)
+{
+	free(conf->name);
+	free(conf->key);
+	free(conf->command);
+	free(conf->cmd);
+	free(conf);
 }
 
 static struct arg_item *get_conf_item(const char *name)
@@ -1074,6 +1111,18 @@ void free_trailers(struct list_head *trailers)
 	list_for_each_safe(pos, p, trailers) {
 		list_del(pos);
 		free_trailer_item(list_entry(pos, struct trailer_item, list));
+	}
+}
+
+void free_new_trailers(struct list_head *trailers)
+{
+	struct list_head *pos, *tmp;
+	struct new_trailer_item *item;
+
+	list_for_each_safe(pos, tmp, trailers) {
+		item = list_entry(pos, struct new_trailer_item, list);
+		list_del(pos);
+		free(item);
 	}
 }
 

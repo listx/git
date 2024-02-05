@@ -47,8 +47,14 @@ struct new_trailer_item {
 	enum trailer_if_missing if_missing;
 };
 
+void trailer_set_conf_where(enum trailer_where, struct trailer_conf *);
+void trailer_set_conf_if_exists(enum trailer_if_exists, struct trailer_conf *);
+void trailer_set_conf_if_missing(enum trailer_if_missing, struct trailer_conf *);
+
+struct trailer_conf *new_trailer_conf(void);
 void duplicate_trailer_conf(struct trailer_conf *dst,
 			    const struct trailer_conf *src);
+const char *trailer_default_separators(void);
 void trailer_add_arg_item(struct list_head *arg_head, char *tok, char *val,
 			  const struct trailer_conf *conf,
 			  const struct new_trailer_item *new_trailer_item);
@@ -148,6 +154,8 @@ void format_trailers(const struct process_trailer_options *,
 		     struct list_head *trailers,
 		     struct strbuf *out);
 void free_trailers(struct list_head *);
+void free_new_trailers(struct list_head *);
+void free_trailer_conf(struct trailer_conf *);
 
 /*
  * Convenience function to format the trailers from the commit msg "msg" into

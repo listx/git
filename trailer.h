@@ -33,20 +33,6 @@ int trailer_set_where(enum trailer_where *item, const char *value);
 int trailer_set_if_exists(enum trailer_if_exists *item, const char *value);
 int trailer_set_if_missing(enum trailer_if_missing *item, const char *value);
 
-/*
- * A list that represents newly-added trailers, such as those provided
- * with the --trailer command line option of git-interpret-trailers.
- */
-struct new_trailer_item {
-	struct list_head list;
-
-	const char *text;
-
-	enum trailer_where where;
-	enum trailer_if_exists if_exists;
-	enum trailer_if_missing if_missing;
-};
-
 void trailer_set_conf_where(enum trailer_where, struct trailer_conf *);
 void trailer_set_conf_if_exists(enum trailer_if_exists, struct trailer_conf *);
 void trailer_set_conf_if_missing(enum trailer_if_missing, struct trailer_conf *);
@@ -77,8 +63,11 @@ struct process_trailer_options {
 
 void parse_trailers_from_config(struct list_head *config_head);
 
-void parse_trailers_from_command_line_args(struct list_head *arg_head,
-					   struct list_head *new_trailer_head);
+void parse_trailer_from_command_line_arg(const char *line,
+					 enum trailer_where where,
+					 enum trailer_if_exists if_exists,
+					 enum trailer_if_missing if_missing,
+					 struct list_head *arg_head);
 
 void process_trailers_lists(struct list_head *head,
 			    struct list_head *arg_head);

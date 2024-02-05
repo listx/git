@@ -49,7 +49,6 @@ static int option_parse_trailer(const struct option *opt,
 				   const char *arg, int unset)
 {
 	struct list_head *trailers = opt->value;
-	struct new_trailer_item *item;
 
 	if (unset) {
 		free_new_trailers(trailers);
@@ -59,12 +58,8 @@ static int option_parse_trailer(const struct option *opt,
 	if (!arg)
 		return -1;
 
-	item = xmalloc(sizeof(*item));
-	item->text = arg;
-	item->where = where;
-	item->if_exists = if_exists;
-	item->if_missing = if_missing;
-	list_add_tail(&item->list, trailers);
+	parse_trailer_from_command_line_arg(arg, where, if_exists, if_missing, trailers);
+
 	return 0;
 }
 
@@ -133,8 +128,6 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 	struct trailer_block *trailer_block;
 	FILE *outfile = stdout;
 
-	trailer_config_init();
-
 	read_input_file(&sb, file);
 
 	if (opts->in_place)
@@ -149,15 +142,8 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 	if (!opts->only_trailers && !blank_line_before_trailer_block(trailer_block))
 		fprintf(outfile, "\n");
 
-
-	if (!opts->only_input) {
-		LIST_HEAD(config_head);
-		LIST_HEAD(arg_head);
-		parse_trailers_from_config(&config_head);
-		parse_trailers_from_command_line_args(&arg_head, new_trailer_head);
-		list_splice(&config_head, &arg_head);
-		process_trailers_lists(&head, &arg_head);
-	}
+	if (!opts->only_input)
+		process_trailers_lists(&head, new_trailer_head);
 
 	/* Print trailer block. */
 	format_trailers(opts, &head, &tb);
@@ -184,6 +170,7 @@ int cmd_interpret_trailers(int argc,
 			   struct repository *repo UNUSED)
 {
 	struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
+	LIST_HEAD(configured_trailers);
 	LIST_HEAD(trailers);
 
 	struct option options[] = {
@@ -209,6 +196,10 @@ int cmd_interpret_trailers(int argc,
 	};
 
 	git_config(git_default_config, NULL);
+	trailer_config_init();
+
+	if (!opts.only_input)
+		parse_trailers_from_config(&configured_trailers);
 
 	argc = parse_options(argc, argv, prefix, options,
 			     git_interpret_trailers_usage, 0);
@@ -218,6 +209,8 @@ int cmd_interpret_trailers(int argc,
 			_("--trailer with --only-input does not make sense"),
 			git_interpret_trailers_usage,
 			options);
+
+	list_splice(&configured_trailers, &trailers);
 
 	if (argc) {
 		int i;

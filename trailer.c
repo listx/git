@@ -756,57 +756,54 @@ void parse_trailers_from_config(struct list_head *config_head)
 	}
 }
 
-void parse_trailers_from_command_line_args(struct list_head *arg_head,
-					   struct list_head *new_trailer_head)
+void parse_trailer_from_command_line_arg(const char *line,
+					 enum trailer_where where,
+					 enum trailer_if_exists if_exists,
+					 enum trailer_if_missing if_missing,
+					 struct list_head *arg_head)
 {
 	struct strbuf tok = STRBUF_INIT;
 	struct strbuf val = STRBUF_INIT;
 	const struct trailer_conf *conf;
-	struct list_head *pos;
 
 	/*
 	 * In command-line arguments, '=' is accepted (in addition to the
 	 * separators that are defined).
 	 */
-	char *cl_separators = xstrfmt("=%s", separators);
+	char *cl_separators = xstrfmt("=%s", trailer_default_separators());
 
-	/* Add an arg item for each trailer on the command line */
-	list_for_each(pos, new_trailer_head) {
-		struct new_trailer_item *tr =
-			list_entry(pos, struct new_trailer_item, list);
-		ssize_t separator_pos = find_separator(tr->text, cl_separators);
-
-		if (separator_pos == 0) {
-			struct strbuf sb = STRBUF_INIT;
-			strbuf_addstr(&sb, tr->text);
-			strbuf_trim(&sb);
-			error(_("empty trailer token in trailer '%.*s'"),
-			      (int) sb.len, sb.buf);
-			strbuf_release(&sb);
-		} else {
-			struct trailer_conf *conf_current = new_trailer_conf();
-			parse_trailer(tr->text, separator_pos, &tok, &val, &conf);
-			duplicate_trailer_conf(conf_current, conf);
-
-			/*
-			 * Override conf_current with settings specified via CLI flags.
-			 */
-			if (tr->where != WHERE_DEFAULT)
-				trailer_set_conf_where(tr->where, conf_current);
-			if (tr->if_exists != EXISTS_DEFAULT)
-				trailer_set_conf_if_exists(tr->if_exists, conf_current);
-			if (tr->if_missing != MISSING_DEFAULT)
-				trailer_set_conf_if_missing(tr->if_missing, conf_current);
-
-			trailer_add_arg_item(arg_head,
-					     strbuf_detach(&tok, NULL),
-					     strbuf_detach(&val, NULL),
-					     conf_current);
-			free_trailer_conf(conf_current);
-		}
-	}
-
+	/* Add an arg item for a trailer from the command line */
+	ssize_t separator_pos = find_separator(line, cl_separators);
 	free(cl_separators);
+
+	if (separator_pos == 0) {
+		struct strbuf sb = STRBUF_INIT;
+		strbuf_addstr(&sb, line);
+		strbuf_trim(&sb);
+		error(_("empty trailer token in trailer '%.*s'"),
+		      (int) sb.len, sb.buf);
+		strbuf_release(&sb);
+	} else {
+		struct trailer_conf *conf_current = new_trailer_conf();
+		parse_trailer(line, separator_pos, &tok, &val, &conf);
+		duplicate_trailer_conf(conf_current, conf);
+
+		/*
+		 * Override conf_current with settings specified via CLI flags.
+		 */
+		if (where != WHERE_DEFAULT)
+			trailer_set_conf_where(where, conf_current);
+		if (if_exists != EXISTS_DEFAULT)
+			trailer_set_conf_if_exists(if_exists, conf_current);
+		if (if_missing != MISSING_DEFAULT)
+			trailer_set_conf_if_missing(if_missing, conf_current);
+
+		trailer_add_arg_item(arg_head,
+				     strbuf_detach(&tok, NULL),
+				     strbuf_detach(&val, NULL),
+				     conf_current);
+		free_trailer_conf(conf_current);
+	}
 }
 
 static const char *next_line(const char *str)
@@ -1121,13 +1118,11 @@ void free_trailers(struct list_head *trailers)
 
 void free_new_trailers(struct list_head *trailers)
 {
-	struct list_head *pos, *tmp;
-	struct new_trailer_item *item;
+	struct list_head *pos, *p;
 
-	list_for_each_safe(pos, tmp, trailers) {
-		item = list_entry(pos, struct new_trailer_item, list);
+	list_for_each_safe(pos, p, trailers) {
 		list_del(pos);
-		free(item);
+		free_arg_item(list_entry(pos, struct arg_item, list));
 	}
 }
 

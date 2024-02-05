@@ -56,8 +56,7 @@ void duplicate_trailer_conf(struct trailer_conf *dst,
 			    const struct trailer_conf *src);
 const char *trailer_default_separators(void);
 void trailer_add_arg_item(struct list_head *arg_head, char *tok, char *val,
-			  const struct trailer_conf *conf,
-			  const struct new_trailer_item *new_trailer_item);
+			  const struct trailer_conf *conf);
 
 struct process_trailer_options {
 	int in_place;

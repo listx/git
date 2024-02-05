@@ -731,21 +731,12 @@ static struct trailer_item *add_trailer_item(struct list_head *head, char *tok,
 }
 
 void trailer_add_arg_item(struct list_head *arg_head, char *tok, char *val,
-			  const struct trailer_conf *conf,
-			  const struct new_trailer_item *new_trailer_item)
+			  const struct trailer_conf *conf)
 {
 	struct arg_item *new_item = xcalloc(1, sizeof(*new_item));
 	new_item->token = tok;
 	new_item->value = val;
 	duplicate_trailer_conf(&new_item->conf, conf);
-	if (new_trailer_item) {
-		if (new_trailer_item->where != WHERE_DEFAULT)
-			new_item->conf.where = new_trailer_item->where;
-		if (new_trailer_item->if_exists != EXISTS_DEFAULT)
-			new_item->conf.if_exists = new_trailer_item->if_exists;
-		if (new_trailer_item->if_missing != MISSING_DEFAULT)
-			new_item->conf.if_missing = new_trailer_item->if_missing;
-	}
 	list_add_tail(&new_item->list, arg_head);
 }
 
@@ -761,7 +752,7 @@ void parse_trailers_from_config(struct list_head *config_head)
 			trailer_add_arg_item(config_head,
 					     xstrdup(token_from_item(item, NULL)),
 					     xstrdup(""),
-					     &item->conf, NULL);
+					     &item->conf);
 	}
 }
 
@@ -793,11 +784,25 @@ void parse_trailers_from_command_line_args(struct list_head *arg_head,
 			      (int) sb.len, sb.buf);
 			strbuf_release(&sb);
 		} else {
+			struct trailer_conf *conf_current = new_trailer_conf();
 			parse_trailer(tr->text, separator_pos, &tok, &val, &conf);
+			duplicate_trailer_conf(conf_current, conf);
+
+			/*
+			 * Override conf_current with settings specified via CLI flags.
+			 */
+			if (tr->where != WHERE_DEFAULT)
+				trailer_set_conf_where(tr->where, conf_current);
+			if (tr->if_exists != EXISTS_DEFAULT)
+				trailer_set_conf_if_exists(tr->if_exists, conf_current);
+			if (tr->if_missing != MISSING_DEFAULT)
+				trailer_set_conf_if_missing(tr->if_missing, conf_current);
+
 			trailer_add_arg_item(arg_head,
 					     strbuf_detach(&tok, NULL),
 					     strbuf_detach(&val, NULL),
-					     conf, tr);
+					     conf_current);
+			free_trailer_conf(conf_current);
 		}
 	}
 

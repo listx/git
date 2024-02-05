@@ -29,9 +29,9 @@ enum trailer_if_missing {
 	MISSING_DO_NOTHING
 };
 
-int trailer_set_where(enum trailer_where *item, const char *value);
-int trailer_set_if_exists(enum trailer_if_exists *item, const char *value);
-int trailer_set_if_missing(enum trailer_if_missing *item, const char *value);
+int trailer_set_where(const char *, enum trailer_where *);
+int trailer_set_if_exists(const char *, enum trailer_if_exists *);
+int trailer_set_if_missing(const char *, enum trailer_if_missing *);
 
 void trailer_set_conf_where(enum trailer_where, struct trailer_conf *);
 void trailer_set_conf_if_exists(enum trailer_if_exists, struct trailer_conf *);

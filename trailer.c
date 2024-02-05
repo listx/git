@@ -382,7 +382,7 @@ void process_trailers_lists(struct list_head *head,
 	}
 }
 
-int trailer_set_where(enum trailer_where *item, const char *value)
+int trailer_set_where(const char *value, enum trailer_where *item)
 {
 	if (!value)
 		*item = WHERE_DEFAULT;
@@ -399,7 +399,7 @@ int trailer_set_where(enum trailer_where *item, const char *value)
 	return 0;
 }
 
-int trailer_set_if_exists(enum trailer_if_exists *item, const char *value)
+int trailer_set_if_exists(const char *value, enum trailer_if_exists *item)
 {
 	if (!value)
 		*item = EXISTS_DEFAULT;
@@ -418,7 +418,7 @@ int trailer_set_if_exists(enum trailer_if_exists *item, const char *value)
 	return 0;
 }
 
-int trailer_set_if_missing(enum trailer_if_missing *item, const char *value)
+int trailer_set_if_missing(const char *value, enum trailer_if_missing *item)
 {
 	if (!value)
 		*item = MISSING_DEFAULT;
@@ -522,18 +522,18 @@ static int git_trailer_default_config(const char *conf_key, const char *value,
 	variable_name = strrchr(trailer_item, '.');
 	if (!variable_name) {
 		if (!strcmp(trailer_item, "where")) {
-			if (trailer_set_where(&default_trailer_conf.where,
-					      value) < 0)
+			if (trailer_set_where(value,
+					      &default_trailer_conf.where) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer_item, "ifexists")) {
-			if (trailer_set_if_exists(&default_trailer_conf.if_exists,
-						  value) < 0)
+			if (trailer_set_if_exists(value,
+						  &default_trailer_conf.if_exists) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer_item, "ifmissing")) {
-			if (trailer_set_if_missing(&default_trailer_conf.if_missing,
-						   value) < 0)
+			if (trailer_set_if_missing(value,
+						   &default_trailer_conf.if_missing) < 0)
 				warning(_("unknown value '%s' for key '%s'"),
 					value, conf_key);
 		} else if (!strcmp(trailer_item, "separators")) {
@@ -602,15 +602,15 @@ static int git_trailer_config(const char *conf_key, const char *value,
 		conf->cmd = xstrdup(value);
 		break;
 	case TRAILER_WHERE:
-		if (trailer_set_where(&conf->where, value))
+		if (trailer_set_where(value, &conf->where))
 			warning(_("unknown value '%s' for key '%s'"), value, conf_key);
 		break;
 	case TRAILER_IF_EXISTS:
-		if (trailer_set_if_exists(&conf->if_exists, value))
+		if (trailer_set_if_exists(value, &conf->if_exists))
 			warning(_("unknown value '%s' for key '%s'"), value, conf_key);
 		break;
 	case TRAILER_IF_MISSING:
-		if (trailer_set_if_missing(&conf->if_missing, value))
+		if (trailer_set_if_missing(value, &conf->if_missing))
 			warning(_("unknown value '%s' for key '%s'"), value, conf_key);
 		break;
 	default:

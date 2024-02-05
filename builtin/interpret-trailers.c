@@ -28,21 +28,21 @@ static int option_parse_where(const struct option *opt,
 			      const char *arg, int unset UNUSED)
 {
 	/* unset implies NULL arg, which is handled in our helper */
-	return trailer_set_where(opt->value, arg);
+	return trailer_set_where(arg, opt->value);
 }
 
 static int option_parse_if_exists(const struct option *opt,
 				  const char *arg, int unset UNUSED)
 {
 	/* unset implies NULL arg, which is handled in our helper */
-	return trailer_set_if_exists(opt->value, arg);
+	return trailer_set_if_exists(arg, opt->value);
 }
 
 static int option_parse_if_missing(const struct option *opt,
 				   const char *arg, int unset UNUSED)
 {
 	/* unset implies NULL arg, which is handled in our helper */
-	return trailer_set_if_missing(opt->value, arg);
+	return trailer_set_if_missing(arg, opt->value);
 }
 
 static int option_parse_trailer(const struct option *opt,

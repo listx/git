@@ -63,12 +63,6 @@ struct process_trailer_options {
 
 void parse_trailers_from_config(struct list_head *config_head);
 
-void parse_trailer_from_command_line_arg(const char *line,
-					 enum trailer_where where,
-					 enum trailer_if_exists if_exists,
-					 enum trailer_if_missing if_missing,
-					 struct list_head *arg_head);
-
 void process_trailers_lists(struct list_head *head,
 			    struct list_head *arg_head);
 
